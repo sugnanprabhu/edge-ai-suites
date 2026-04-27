@@ -122,8 +122,8 @@ services:
       - GF_INSTALL_PLUGINS=grafana-mqtt-datasource
       - http_proxy=${http_proxy}
       - https_proxy=${https_proxy}
-      - no_proxy=${no_proxy},${HOST_IP}
-      - NO_PROXY=${no_proxy},${HOST_IP}
+      - no_proxy=${no_proxy},${HOST_IP},nginx-reverse-proxy
+      - NO_PROXY=${no_proxy},${HOST_IP},nginx-reverse-proxy
       - GF_SERVER_ROOT_URL=https://localhost/grafana/
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
       - GF_PANELS_DISABLE_SANITIZE_HTML=true
@@ -157,7 +157,7 @@ services:
     environment:
       - HTTP_PROXY=${http_proxy}
       - HTTPS_PROXY=${https_proxy}
-      - NO_PROXY=$no_proxy,localhost,127.0.0.1
+      - NO_PROXY=$no_proxy,localhost,127.0.0.1,metrics-service
     volumes:
       - ./${SAMPLE_APP}/configs/open_telemetry/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
@@ -179,6 +179,20 @@ services:
     volumes:
       - ./${SAMPLE_APP}/configs/open_telemetry/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml # OpenTelemetry Collector config
     restart: always
+    networks:
+      - app_network
+
+  metrics-service:
+    image: intel/metrics-service:2026.1.0-20260417-weekly
+    container_name: metrics-service
+    privileged: true
+    ports:
+      - "9090:9090"
+      - "9273:9273"
+    volumes:
+      - /sys:/sys
+      - /dev:/dev
+    restart: unless-stopped
     networks:
       - app_network
 

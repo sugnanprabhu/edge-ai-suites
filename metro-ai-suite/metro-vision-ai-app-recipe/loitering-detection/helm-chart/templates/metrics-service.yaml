@@ -1,0 +1,64 @@
+# Copyright (c) 2025 Intel Corporation.
+apiVersion: v1
+kind: Service
+metadata:
+  name: metrics-service
+  namespace: {{ $.Values.namespace }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: service
+      protocol: TCP
+      port: {{ $.Values.config.metrics_service.int.service_port }}
+      targetPort: {{ $.Values.config.metrics_service.int.service_port }}
+    - name: metrics
+      protocol: TCP
+      port: {{ $.Values.config.metrics_service.int.metrics_endpoint_port }}
+      targetPort: {{ $.Values.config.metrics_service.int.metrics_endpoint_port }}
+  selector:
+    app: metrics-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: metrics-service
+  name: deployment-metrics-service
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: metrics-service
+  template:
+    metadata:
+      labels:
+        app: metrics-service
+    spec:
+      {{- if and .Values.DOCKER_USERNAME .Values.DOCKER_PASSWORD }}
+      imagePullSecrets:
+      - name: registryauth
+      {{- end }}
+      containers:
+        - name: metrics-service
+          image: {{ $.Values.metrics_service.image }}:{{ $.Values.metrics_service.imageTag }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: {{ $.Values.config.metrics_service.int.service_port }}
+            - containerPort: {{ $.Values.config.metrics_service.int.metrics_endpoint_port }}
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: sys
+              mountPath: /sys
+              readOnly: true
+            - name: dev
+              mountPath: /dev
+      volumes:
+        - name: sys
+          hostPath:
+            path: /sys
+        - name: dev
+          hostPath:
+            path: /dev
+      restartPolicy: Always
