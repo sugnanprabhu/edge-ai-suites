@@ -7,10 +7,6 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - name: service
-      protocol: TCP
-      port: {{ $.Values.config.metrics_service.int.service_port }}
-      targetPort: {{ $.Values.config.metrics_service.int.service_port }}
     - name: metrics
       protocol: TCP
       port: {{ $.Values.config.metrics_service.int.metrics_endpoint_port }}
@@ -44,7 +40,6 @@ spec:
           image: {{ $.Values.metrics_service.image }}:{{ $.Values.metrics_service.imageTag }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           ports:
-            - containerPort: {{ $.Values.config.metrics_service.int.service_port }}
             - containerPort: {{ $.Values.config.metrics_service.int.metrics_endpoint_port }}
           securityContext:
             privileged: true

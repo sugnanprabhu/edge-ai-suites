@@ -187,7 +187,6 @@ services:
     container_name: metrics-service
     privileged: true
     ports:
-      - "9090:9090"
       - "9273:9273"
     volumes:
       - /sys:/sys

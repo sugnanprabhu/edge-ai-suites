@@ -112,7 +112,6 @@ config:
   metrics_service:
     name: metrics-service
     int:
-      service_port: "9090"
       metrics_endpoint_port: "9273"
 volumes:
   pipelines:
