@@ -110,7 +110,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "cpu_usage_percentage",
+          "expr": "cpu_usage_system",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
