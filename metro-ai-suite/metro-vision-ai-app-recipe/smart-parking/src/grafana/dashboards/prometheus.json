@@ -314,7 +314,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "gpu_engine_usage_usage",
+          "expr": "qmmd_gpu_engine_utilization_ratio",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,

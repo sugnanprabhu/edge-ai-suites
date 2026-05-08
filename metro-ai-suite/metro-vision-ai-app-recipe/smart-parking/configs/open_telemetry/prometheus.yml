@@ -4,5 +4,5 @@ global:
 scrape_configs:
   - job_name: 'otel-log-collector'
     static_configs:
-      - targets: ['otel-collector:9464', 'metrics-service:9273']
+      - targets: ['otel-collector:9464', 'metrics-manager:9273', 'metrics-manager:9274']
 

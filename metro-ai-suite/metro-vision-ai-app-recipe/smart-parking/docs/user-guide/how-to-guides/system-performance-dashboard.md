@@ -1,6 +1,6 @@
 # View System Performance Dashboard
 
-The **System Performance Dashboard** in Grafana visualizes real-time system hardware metrics collected by the `metrics-service` and scraped by Prometheus.
+The **System Performance Dashboard** in Grafana visualizes real-time system hardware metrics collected by the `metrics-manager` and scraped by Prometheus.
 
 ## Open the Dashboard in Grafana
 
@@ -29,7 +29,7 @@ Each panel displays a time-series graph for the last 5 minutes by default. The p
 - **CPU** — tracks `cpu_usage_system` over time
 - **CPU Temp** — tracks `temp_temp` over time
 - **CPU Frequency** — tracks `cpu_frequency_avg_frequency` over time
-- **GPU Usage** — tracks `gpu_engine_usage_usage` over time
+- **GPU Usage** — tracks `qmmd_gpu_engine_utilization_ratio` over time
 - **GPU Power** — tracks `gpu_power` over time
 - **GPU Frequency** — tracks `gpu_frequency` over time
 - **Memory Used** — tracks `mem_used_percent` over time
