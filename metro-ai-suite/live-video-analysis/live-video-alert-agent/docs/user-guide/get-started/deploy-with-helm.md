@@ -48,6 +48,8 @@ Edit `user_values_override.yaml` with values for your environment:
 | `global.gpu.device` | Target device for inference | `GPU` |
 | `global.gpu.supplementalGroups` | Linux group IDs for GPU device access. Run `getent group render video \| cut -d: -f3` on the GPU node to find values | `[109, 44]` |
 | `app.rtspUrl` | RTSP stream URL to load at startup (optional) | `rtsp://host:port/stream` |
+| `app.mcpEnabled` | Enable MCP (Model Context Protocol) tool integration | `true` / `false` |
+| `app.mcpServersConfig` | MCP server configuration JSON (see `resources/mcp_servers.json` for format) | See `values.yaml` |
 | `app.nodeSelector` | Schedule app pod on a specific node | `kubernetes.io/hostname: worker1` |
 
 > **Note:** `user_values_override.yaml` may contain credentials. Do not commit it to version control.

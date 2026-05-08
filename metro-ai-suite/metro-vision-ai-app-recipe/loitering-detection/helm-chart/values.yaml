@@ -29,6 +29,7 @@ nginx:
 metrics_service:
   image: intel/metrics-service
   imageTag: 2026.1.0-20260417-weekly
+timezone: ""  # Leave empty; set dynamically at install time: --set timezone=$(cat /etc/timezone)
 env:
   ENABLE_WEBRTC: "true"
   ENABLE_RTSP: "true"

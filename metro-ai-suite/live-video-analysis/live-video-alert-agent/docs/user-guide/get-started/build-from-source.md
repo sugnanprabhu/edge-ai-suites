@@ -3,7 +3,7 @@
 This guide provides step-by-step instructions for building Live Video Alert Agent Sample Application from source.
 
 ## Building the Images
-To build the Docker image for `Live Video Alert` application, follow these steps:
+To build the Docker image for `Live Video Alert Agent` application, follow these steps:
 
 1. Ensure you are in the project directory:
      ```bash
