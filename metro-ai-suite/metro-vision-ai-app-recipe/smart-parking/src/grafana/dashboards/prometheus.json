@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 4,
+  "id": 1,
   "links": [],
   "panels": [
     {
@@ -77,7 +77,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -110,7 +111,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "cpu_usage_system",
+          "expr": "cpu_usage_percentage",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -179,7 +180,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "celsius"
         },
         "overrides": []
       },
@@ -281,7 +283,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "percentunit"
         },
         "overrides": []
       },
@@ -292,6 +295,7 @@
         "y": 6
       },
       "id": 1,
+      "interval": "1s",
       "options": {
         "legend": {
           "calcs": [],
@@ -383,7 +387,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "mwatt"
         },
         "overrides": []
       },
@@ -485,7 +490,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "rotkhz"
         },
         "overrides": []
       },
@@ -587,7 +593,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "rotmhz"
         },
         "overrides": []
       },
@@ -689,7 +696,8 @@
                 "value": 80
               }
             ]
-          }
+          },
+          "unit": "percent"
         },
         "overrides": []
       },
