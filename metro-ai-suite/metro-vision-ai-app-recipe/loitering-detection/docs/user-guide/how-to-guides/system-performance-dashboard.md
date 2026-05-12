@@ -26,7 +26,7 @@ and log in with the default credentials (`admin` / `admin`).
 
 Each panel displays a time-series graph for the last 5 minutes by default. The panels are:
 
-- **CPU** — tracks `cpu_usage_system` over time
+- **CPU** — tracks `cpu_usage_percentage` over time
 - **CPU Temp** — tracks `temp_temp` over time
 - **CPU Frequency** — tracks `cpu_frequency_avg_frequency` over time
 - **GPU Usage** — tracks `qmmd_gpu_engine_utilization_ratio` over time
