@@ -1,6 +1,6 @@
 # Script Reference
 
-## [mqtt_camera_capture_processor.py](../../../usecases/scenescape-deterministic-inference/hota/scripts/hota-metrics/mqtt_camera_capture_processor.py)
+## [mqtt_camera_capture_processor.py](../../../../usecases/scenescape-deterministic-inference/hota/scripts/hota-metrics/mqtt_camera_capture_processor.py)
 
 **Location:** `usecases/scenescape-deterministic-inference/hota/scripts/hota-metrics/`
 
@@ -41,7 +41,7 @@ OUTPUT_DIRECTORY = "dataset"     # Where reconstructed JSON files are written
 
 ---
 
-## [traffic_generator.py](../../../usecases/scenescape-deterministic-inference/hota/scripts/traffic_generator.py)
+## [traffic_generator.py](../../../../usecases/scenescape-deterministic-inference/hota/scripts/traffic_generator.py)
 
 **Location:** `usecases/scenescape-deterministic-inference/hota/scripts/`
 
@@ -70,7 +70,7 @@ camera frame numbers so it does not interfere with the capture start or end.
 
 ---
 
-## [sei_parser.py](../../../usecases/scenescape-deterministic-inference/hota/scripts/gvapython/sei_parser.py)
+## [sei_parser.py](../../../../usecases/scenescape-deterministic-inference/hota/scripts/gvapython/sei_parser.py)
 
 **Location:** `usecases/scenescape-deterministic-inference/hota/scripts/gvapython/`
 

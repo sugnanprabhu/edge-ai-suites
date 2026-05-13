@@ -51,7 +51,7 @@ Scenescape supports the NTP synchronized RTSP camera by default. Make sure to se
 
 ### PTP Synchronization (Basler GigE Camera)
 The Basler camera provides more accurate hardware PTP timestamps, but requires additional configuration steps to set up the camera, switch, and host for IEEE 1588v2 PTP. Follow the instructions in the next section to enable PTP support for the Basler camera.
-Follow [Configure Basler Camera for Scenescape](./how-to-guides/integrate-basler-camera-with-scenescape.md) before continuing with the rest of the steps in this guide to ensure the camera is properly configured for PTP and SceneScape can read the hardware timestamps.
+Follow [Configure Basler Camera for Scenescape](./how-to-guides/scenescape-deterministic-inference/integrate-basler-camera-with-scenescape.md) before continuing with the rest of the steps in this guide to ensure the camera is properly configured for PTP and SceneScape can read the hardware timestamps.
 
 
 ## End-to-End Testing
@@ -62,7 +62,7 @@ Create VLAN interfaces to isolate critical camera traffic from best-effort traff
 TSN switch.
 
 > **Note:** First configure VLAN IDs on the MOXA switch as described in the
-> [MOXA VLAN Configuration Guide](./how-to-guides/configure-vlan-on-moxa-switch.md).
+> [MOXA VLAN Configuration Guide](./how-to-guides/common/configure-vlan-on-moxa-switch.md).
 
 ```bash
 # Replace enp1s0 with your i226 interface name
@@ -78,7 +78,7 @@ sudo ifconfig enp1s0.5 192.168.5.31 up
 > **Note**: if you are using 1588v2 PTP for the time synchronization, make sure to assign any IP address to the default host interface (e.g., `enp1s0`) that is within the same subnet as the camera and switch to ensure the PTP daemon can discover the Grandmaster over UDP.
 
 For detailed instructions, refer to the
-[HOST VLAN Configuration Guide](./how-to-guides/create-vlan-on-all-machines.md).
+[HOST VLAN Configuration Guide](./how-to-guides/common/create-vlan-on-all-machines.md).
 
 ### Step 2: Run SceneScape
 
@@ -90,9 +90,11 @@ make demo
 
 ### Step 3: Inject Background Traffic
 
-Use iPerf3 to simulate network congestion over the vlan 5. Observe the SceneScape controller logs for
-signs of packet loss and video stream degradation as best-effort traffic competes with
-the camera stream.
+Use iPerf3 to simulate network congestion over VLAN 5. Observe the SceneScape
+controller logs for signs of packet loss and video stream degradation as
+best-effort traffic competes with the camera stream. You may also see visual
+frame corruption in the camera stream panel of the SceneScape dashboard.
+
 
 ### Step 4: Enable TSN Traffic Shaping
 
@@ -105,7 +107,25 @@ prioritize the camera traffic, protecting it from background congestion.
 > SceneScape.
 
 For detailed instructions, refer to the
-[TSN Traffic Shaping Guide](./how-to-guides/enable-tsn-traffic-shaping.md).
+[TSN Traffic Shaping Guide](./how-to-guides/common/enable-tsn-traffic-shaping.md).
+
+
+### Step 5: HOTA Metrics and Observability
+
+After validating TSN shaping behavior under load, measure tracking quality and timing
+consistency to quantify the end-to-end impact.
+
+Use the HOTA workflow to compare baseline behavior (without shaping) versus TSN-aware
+traffic scheduling. While running the experiment, monitor key runtime signals such as:
+
+- Per-stream inference latency trends
+- Frame drop rate under congestion
+- Timestamp alignment and drift across synchronized devices
+
+For the full procedure, metric definitions, and example commands, see:
+
+[HOTA Metrics Guide](./how-to-guides/scenescape-deterministic-inference/scenescape-measuring-hota-metrics-with-tsn.md)
+
 
 ## Resources
 

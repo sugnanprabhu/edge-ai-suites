@@ -37,7 +37,7 @@ the `gencamsrc` GStreamer plugin. Follow the instructions below to build a custo
 > Apply the patch to the `edge-ai-libraries` repository root **before** building the Docker
 > image:
 >
-> git apply [deterministic-threat-detection/usecases/scenescape-deterministic-inference/basler/patches/genicam.patch](../../../usecases/scenescape-deterministic-inference/basler/patches/genicam.patch)
+> git apply [deterministic-threat-detection/usecases/scenescape-deterministic-inference/basler/patches/genicam.patch](../../../../usecases/scenescape-deterministic-inference/basler/patches/genicam.patch)
 >
 Once the image is built update the image reference in `sample_data/docker-compose-dl-streamer-example.yml` to point to the custom Basler-enabled image for `queuing-video` service.
 
@@ -54,7 +54,7 @@ From the SceneScape repository root, apply the patch and update the image refere
 image built in the previous step:
 
 
-> git apply [deterministic-threat-detection/usecases/scenescape-deterministic-inference/basler/patches/macvlan_docker.patch](../../../usecases/scenescape-deterministic-inference/basler/patches/macvlan_docker.patch)
+> git apply [deterministic-threat-detection/usecases/scenescape-deterministic-inference/basler/patches/macvlan_docker.patch](../../../../usecases/scenescape-deterministic-inference/basler/patches/macvlan_docker.patch)
 
 
 > **Note:** Edit the patched `docker-compose-dl-streamer-example.yml` to set the correct
@@ -72,7 +72,7 @@ post-decode software timestamp.
 
 From the SceneScape repository root:
 
-> git apply [deterministic-threat-detection/usecases/scenescape-deterministic-inference/basler/patches/sscape_adapter.patch](../../../usecases/scenescape-deterministic-inference/basler/patches/sscape_adapter.patch)
+> git apply [deterministic-threat-detection/usecases/scenescape-deterministic-inference/basler/patches/sscape_adapter.patch](../../../../usecases/scenescape-deterministic-inference/basler/patches/sscape_adapter.patch)
 
 ---
 

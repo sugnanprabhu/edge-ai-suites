@@ -27,7 +27,7 @@ Open pylon Viewer and enable PTP timestamping under the camera's **PTP** feature
 shown below. This causes the camera to embed a hardware PTP timestamp in every captured
 frame.
 
-![pylon Viewer: Enable PTP Timestamping](../_assets/pylonviewer-basler-enable-ptp-timestamp.png)
+![pylon Viewer: Enable PTP Timestamping](../../_assets/pylonviewer-basler-enable-ptp-timestamp.png)
 
 ### Step 3: Configure PTP Parameters
 

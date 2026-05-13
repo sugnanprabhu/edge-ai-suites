@@ -54,7 +54,7 @@ All machines are connected to a MOXA switch and synchronized using PTP.
    > **Note:** Make sure to replace `enp1s0` with the actual network interface name associated
    > with the `i226` network card.
 
-   For detailed instructions on configuring PTP, refer to the [PTP Configuration Guide](./how-to-guides/configure-ptp-gptp.md).
+   For detailed instructions on configuring PTP, refer to the [PTP Configuration Guide](./how-to-guides/rtsp-deterministic-inference/configure-ptp-gptp.md).
 
 2. **Create VLAN on all machines.**
 
@@ -62,7 +62,7 @@ All machines are connected to a MOXA switch and synchronized using PTP.
    isolating critical data from best-effort traffic.
 
    > **Note:** Configure the VLAN on the MOXA as mentioned in the
-   > [MOXA VLAN Configuration Guide](./how-to-guides/configure-vlan-on-moxa-switch.md)    to assign VLAN ID on TSN switch.
+   > [MOXA VLAN Configuration Guide](./how-to-guides/common/configure-vlan-on-moxa-switch.md)    to assign VLAN ID on TSN switch.
 
    On the Arrow Lake machines, create VLAN interfaces corresponding to the VLAN IDs
    configured on the MOXA switch.
@@ -87,7 +87,7 @@ All machines are connected to a MOXA switch and synchronized using PTP.
    >   with the `i226` network card.
 
    For detailed instructions on creating VLANs on HOST machines, refer to the
-   [HOST VLAN Configuration Guide](./how-to-guides/create-vlan-on-all-machines.md).
+   [HOST VLAN Configuration Guide](./how-to-guides/common/create-vlan-on-all-machines.md).
 
 3. **Run RTSP Camera Capture and AI Inference.**
 
@@ -96,14 +96,14 @@ All machines are connected to a MOXA switch and synchronized using PTP.
    video and publish the results over MQTT.
 
    For detailed instructions on running RTSP camera capture and AI inference, refer to the
-   [RTSP Camera and AI Inference Guide](./how-to-guides/run-rtsp-camera-and-ai-inference.md).
+   [RTSP Camera and AI Inference Guide](./how-to-guides/rtsp-deterministic-inference/run-rtsp-camera-and-ai-inference.md).
 
 4. **Run Sensor Data Producer.**
 
    On Machine 3, start the Python script that simulates a sensor generating and publishing timestamped data over MQTT.
 
    For detailed instructions on running the sensor data producer, refer to the
-   [Sensor Data Producer Guide](./how-to-guides/run-sensor-data-producer.md).
+   [Sensor Data Producer Guide](./how-to-guides/rtsp-deterministic-inference/run-sensor-data-producer.md).
 
 5. **Run MQTT Aggregator and Visualization.**
 
@@ -112,7 +112,7 @@ All machines are connected to a MOXA switch and synchronized using PTP.
    ![MQTT Data Aggregator](./_assets/mqtt-data-aggregator.png)
 
    For detailed instructions on running the MQTT aggregator and visualization, refer to the
-   [MQTT Aggregator and Visualization Guide](./how-to-guides/run-mqtt-aggregator-and-visualization.md).
+   [MQTT Aggregator and Visualization Guide](./how-to-guides/rtsp-deterministic-inference/run-mqtt-aggregator-and-visualization.md).
 
 6. **Run Traffic Injector.**
 
@@ -122,7 +122,7 @@ All machines are connected to a MOXA switch and synchronized using PTP.
    ![MQTT Data Aggregator With Traffic](./_assets/mqtt-data-aggregator-with-traffic.png)
 
    For detailed instructions on running the traffic injector, refer to the
-   [Traffic Injector Guide](./how-to-guides/run-traffic-injector.md).
+   [Traffic Injector Guide](./how-to-guides/rtsp-deterministic-inference/run-traffic-injector.md).
 
 7. **Enable TSN Traffic Shaping.**
 
@@ -131,7 +131,7 @@ All machines are connected to a MOXA switch and synchronized using PTP.
    ![MOXA Time Aware Shaper](./_assets/moxa-time-aware-shaper-port-setting.png)
 
    For detailed instructions on enabling TSN traffic shaping, refer to the
-   [TSN Traffic Shaping Guide](./how-to-guides/enable-tsn-traffic-shaping.md).
+   [TSN Traffic Shaping Guide](./how-to-guides/common/enable-tsn-traffic-shaping.md).
 
 8. **Analyze Results and Visualize Latency.**
 

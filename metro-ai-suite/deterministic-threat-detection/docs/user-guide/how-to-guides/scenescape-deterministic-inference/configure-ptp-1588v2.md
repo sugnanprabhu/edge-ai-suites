@@ -21,7 +21,7 @@ sudo apt-get install -y linuxptp
 By default on resetting the MOXA switch it will be using the 802.1AS (gPTP) profile, so the MOXA switch time-sync profile
 must be switched from 802.1AS (gPTP) to 1588v2. Apply the settings shown below:
 
-![MOXA Time Sync Settings for Basler](../_assets/moxa-time-sync-settings-for-basler.png)
+![MOXA Time Sync Settings for Basler](../../_assets/moxa-time-sync-settings-for-basler.png)
 
 Key settings:
 - **Profile**: IEEE 1588v2 Default Profile

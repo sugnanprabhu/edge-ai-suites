@@ -76,7 +76,7 @@ to detect and compensate for drops.
 ---
 
 ## Prerequisites
-- A MOXA TSN switch and three machines with the VLAN configured as per the [HOST VLAN Configuration Guide](./create-vlan-on-all-machines.md).
+- A MOXA TSN switch and three machines with the VLAN configured as per the [HOST VLAN Configuration Guide](../common/create-vlan-on-all-machines.md).
 
 ---
 
@@ -189,7 +189,7 @@ This is what allows the capture script to detect dropped frames. This informatio
 
 Copy it into the SceneScape pipeline server scripts directory:
 
-> cp [usecases/scenescape-deterministic-inference/hota/scripts/gvapython/sei_parser.py](../../../usecases/scenescape-deterministic-inference/hota/scripts/gvapython/sei_parser.py) \
+> cp [usecases/scenescape-deterministic-inference/hota/scripts/gvapython/sei_parser.py](../../../../usecases/scenescape-deterministic-inference/hota/scripts/gvapython/sei_parser.py) \
    scenescape/dlstreamer-pipeline-server/user_scripts/gvapython/sscape/sei_parser.py
 
 ### 2c. Deploy the HOTA Pipeline Configuration
@@ -197,7 +197,7 @@ Copy it into the SceneScape pipeline server scripts directory:
 A ready-made pipeline configuration is provided at:
 
 
-> [usecases/scenescape-deterministic-inference/hota/configs/hota-metrics-config.json](../../../usecases/scenescape-deterministic-inference/hota/configs/hota-metrics-config.json)
+> [usecases/scenescape-deterministic-inference/hota/configs/hota-metrics-config.json](../../../../usecases/scenescape-deterministic-inference/hota/configs/hota-metrics-config.json)
 
 
 It already includes the `sei_parser.py` GVAPython element in the pipeline configuration. The only change required is to substitute
@@ -320,7 +320,7 @@ The traffic generator:
 Configure the Time-Aware Shaper (IEEE 802.1Qbv) on the MOXA switch to protect the
 camera stream traffic from the iperf3 background traffic.
 
-Refer to the [TSN Traffic Shaping Guide](./enable-tsn-traffic-shaping.md) for full
+Refer to the [TSN Traffic Shaping Guide](../common/enable-tsn-traffic-shaping.md) for full
 instructions. Apply the port setting on the switch port connected to `Machine 1`.
 
 ---
@@ -345,7 +345,7 @@ for `TrackEvalEvaluator/` inside each run directory for the HOTA, MOTA, and IDF1
 - [HOTA Script Reference](./hota-script-reference.md)
 - [Tracker Evaluation Pipeline README](https://github.com/open-edge-platform/scenescape/tree/main/tools/tracker/evaluation/README.md)
 - [TrackEval Toolkit](https://github.com/JonathonLuiten/TrackEval)
-- [TSN Traffic Shaping Guide](./enable-tsn-traffic-shaping.md)
+- [TSN Traffic Shaping Guide](../common/enable-tsn-traffic-shaping.md)
 - [Create Scene and Cameras via API](./create-scene-camera-api.md)
 
 [cam-x1-mp4]: https://github.com/open-edge-platform/scenescape/blob/main/tests/system/metric/dataset/Cam_x1_0.mp4
