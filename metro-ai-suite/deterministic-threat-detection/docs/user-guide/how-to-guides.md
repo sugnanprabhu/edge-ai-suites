@@ -3,7 +3,7 @@
 Follow the how‑tos to configure the system, enable the required features, and run it
 successfully. The guides collected here present more details on the steps in [Get Started](./get-started.md).
 
-- [Synchronize PTP Time (IEEE 802.1AS)](./how-to-guides/configure-ptp.md)
+- [Synchronize PTP Time (IEEE 802.1AS)](./how-to-guides/configure-ptp-gptp.md)
 - [Configure the MOXA TSN Switch](./how-to-guides/configure-moxa-switch.md)
 - [Configure VLAN on MOXA Switch](./how-to-guides/configure-vlan-on-moxa-switch.md)
 - [Create VLAN on All Machines](./how-to-guides/create-vlan-on-all-machines.md)

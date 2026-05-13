@@ -45,7 +45,7 @@ An aggregation node collects the MQTT messages and calculates the end-to-end lat
 ## Learn More
 
 - [Get Started](./docs/user-guide/get-started.md): For detailed instructions on how to set up the environment and run the demonstration.
-- [How to Configure PTP](./docs/user-guide/how-to-guides/configure-ptp.md): For step-by-step guidance on setting up Precision Time Protocol (PTP) for time synchronization across devices.
+- [How to Configure PTP](./docs/user-guide/how-to-guides/configure-ptp-gptp.md): For step-by-step guidance on setting up Precision Time Protocol (PTP) for time synchronization across devices.
 - [MOXA TSN Switch Configuration](./docs/user-guide/how-to-guides/configure-moxa-switch.md): For instructions on configuring the MOXA TSN switch for the first time.
 - [Enable TSN Traffic Shaping on MOXA Switch](./docs/user-guide/how-to-guides/enable-tsn-traffic-shaping.md): For details on how to enable IEEE 802.1Qbv (Time-Aware Shaper) on the MOXA switch to prioritize critical traffic.
 - [Run RTSP Camera Capture and AI Inference](./docs/user-guide/how-to-guides/run-rtsp-camera-and-ai-inference.md): For details on how to set up and run the RTSP camera capture and AI inference pipelines.

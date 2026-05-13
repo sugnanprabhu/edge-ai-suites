@@ -54,7 +54,7 @@ All machines are connected to a MOXA switch and synchronized using PTP.
    > **Note:** Make sure to replace `enp1s0` with the actual network interface name associated
    > with the `i226` network card.
 
-   For detailed instructions on configuring PTP, refer to the [PTP Configuration Guide](./how-to-guides/configure-ptp.md).
+   For detailed instructions on configuring PTP, refer to the [PTP Configuration Guide](./how-to-guides/configure-ptp-gptp.md).
 
 2. **Create VLAN on all machines.**
 
