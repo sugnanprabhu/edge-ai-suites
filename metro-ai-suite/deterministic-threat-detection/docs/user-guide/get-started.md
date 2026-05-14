@@ -6,7 +6,7 @@ system in action.
 
 ## How It Works
 
-![DTD High-Level Architecture](./_assets/deterministic-threat-detection-architecture.svg)
+![DTD High-Level Architecture](./_assets/rtsp-deterministic-inference-architecture.svg)
 
 The use case involves multiple RTSP cameras streaming video to edge compute nodes for AI
 inference. Simultaneously, a sensor data producer generates telemetry data. Both inference

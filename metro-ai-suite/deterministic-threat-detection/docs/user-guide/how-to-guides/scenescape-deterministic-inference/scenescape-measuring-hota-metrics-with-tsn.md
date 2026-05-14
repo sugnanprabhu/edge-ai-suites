@@ -80,6 +80,12 @@ to detect and compensate for drops.
 
 ---
 
+## Network Topology
+
+![HOTA Evaluation Setup](../../_assets/hota-evaluation-setup.svg)
+
+---
+
 ## Hardware Setup
 
 | Machine | Role |
@@ -90,19 +96,6 @@ to detect and compensate for drops.
 
 All machines are connected via the MOXA TSN switch and synchronized using PTP.
 
----
-
-## Network Topology
-
-```
-Machine 2 (RTSP stream) ───────┐
-                      (VLAN 1) │
-                               │ 
-                       MOXA TSN Switch  ──────────────────────  Machine 1 (SceneScape)
-                               │           (VLAN 1 + VLAN 5)
-                      (VLAN 5) │
-Machine 3 (Traffic Injector) ──┘
-```
 ---
 
 ## Step 1 — Machine 2: Stream the Test Video via RTSP
