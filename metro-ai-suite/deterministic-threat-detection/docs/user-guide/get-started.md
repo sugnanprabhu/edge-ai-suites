@@ -4,6 +4,22 @@ This guide provides a streamlined path to setting up and running the Determinist
 Detection demonstration. It covers the essential prerequisites and the main steps to see the
 system in action.
 
+## How It Works
+
+![DTD High-Level Architecture](./_assets/deterministic-threat-detection-architecture.svg)
+
+The use case involves multiple RTSP cameras streaming video to edge compute nodes for AI
+inference. Simultaneously, a sensor data producer generates telemetry data. Both inference
+results and sensor data are published over MQTT.
+
+An aggregation node measures the end-to-end latency. By injecting background traffic and then
+enabling TSN features, the demonstration shows how TSN provides consistent and deterministic
+latency for critical data streams.
+
+To ensure synchronized operations across all devices, every machine in the system uses Precision Time Protocol (PTP) to align their clocks accurately.
+
+An aggregation node collects the MQTT messages and calculates the end-to-end latency. To demonstrate the impact of Time-Sensitive Networking (TSN), background traffic is introduced into the network. By enabling TSN features, the system showcases how TSN guarantees consistent and deterministic latency for critical data streams, even under network congestion.
+
 ## Hardware Details
 
 - **AXIS RTSP Cameras**: Cameras that support RTSP streaming.

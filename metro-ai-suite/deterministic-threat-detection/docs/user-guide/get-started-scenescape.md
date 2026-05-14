@@ -85,8 +85,10 @@ For detailed instructions, refer to the
 ```bash
 git clone https://github.com/open-edge-platform/scenescape
 cd scenescape
+git checkout 2026.1.0-rc1 -b 2026.1.0-rc1
 make demo
 ```
+> **Note:** Use the instructions in the [SceneScape prebuilt containers guide](https://github.com/open-edge-platform/scenescape/blob/2026.1.0-rc1/docs/user-guide/how-to-guides/deploy-scenescape-using-prebuilt-containers.md#31-configure-docker-compose-to-use-prebuilt-images) to use the prebuilt images.
 
 ### Step 3: Inject Background Traffic
 

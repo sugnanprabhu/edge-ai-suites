@@ -1,5 +1,5 @@
 diff --git a/sample_data/docker-compose-dl-streamer-example.yml b/sample_data/docker-compose-dl-streamer-example.yml
-index 2c5aa419..8e99c04e 100644
+index 1d94a6e5..c0a5168a 100644
 --- a/sample_data/docker-compose-dl-streamer-example.yml
 +++ b/sample_data/docker-compose-dl-streamer-example.yml
 @@ -6,6 +6,14 @@ name: scenescape
@@ -17,8 +17,8 @@ index 2c5aa419..8e99c04e 100644
  
  secrets:
    root-cert:
-@@ -347,6 +355,8 @@ services:
-     image: docker.io/intel/dlstreamer-pipeline-server:2026.0.0-ubuntu24
+@@ -364,6 +372,8 @@ services:
+     image: docker.io/intel/dlstreamer-pipeline-server:2026.1.0-20260428-weekly-ubuntu24
      networks:
        scenescape:
 +      gige_net:

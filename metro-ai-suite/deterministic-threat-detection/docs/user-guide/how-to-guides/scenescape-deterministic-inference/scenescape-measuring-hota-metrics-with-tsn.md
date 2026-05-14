@@ -32,7 +32,7 @@ scenescape/tools/tracker/evaluation/
 ```
 
 For a full reference, see the
-[Tracker Evaluation Pipeline README](https://github.com/open-edge-platform/scenescape/tree/main/tools/tracker/evaluation/README.md).
+[Tracker Evaluation Pipeline README](https://github.com/open-edge-platform/scenescape/tree/2026.1.0-rc1/tools/tracker/evaluation/README.md).
 
 ### How the Existing Evaluation Pipeline Works
 
@@ -166,8 +166,11 @@ Clone the scenescape repository and run the project using `make demo`
 ```bash
 git clone https://github.com/open-edge-platform/scenescape
 cd scenescape
+git checkout 2026.1.0-rc1 -b 2026.1.0-rc1
 make demo
 ```
+
+> **Note:** Use the instructions in the [SceneScape prebuilt containers guide](https://github.com/open-edge-platform/scenescape/blob/2026.1.0-rc1/docs/user-guide/how-to-guides/deploy-scenescape-using-prebuilt-containers.md#31-configure-docker-compose-to-use-prebuilt-images) to use the prebuilt images.
 
 Create the `hota-scene` scene and its two cameras, run the
 setup script:
@@ -179,7 +182,7 @@ bash usecases/scenescape-deterministic-inference/hota/scripts/setup-hota-scene.s
 
 This creates the scene `hota-scene` and registers cameras `Cam_x1_0` and `Cam_x2_0`
 via the SceneScape REST API. See
-[Scenescape API Reference document](https://github.com/open-edge-platform/scenescape/blob/main/docs/user-guide/api-reference.md) for details.
+[Scenescape API Reference document](https://github.com/open-edge-platform/scenescape/blob/2026.1.0-rc1/docs/user-guide/api-reference.md) for details.
 
 ### 2b. Install the SEI Frame-Number Parser
 
@@ -343,12 +346,13 @@ for `TrackEvalEvaluator/` inside each run directory for the HOTA, MOTA, and IDF1
 ## References
 
 - [HOTA Script Reference](./hota-script-reference.md)
-- [Tracker Evaluation Pipeline README](https://github.com/open-edge-platform/scenescape/tree/main/tools/tracker/evaluation/README.md)
+- [Tracker Evaluation Pipeline README](https://github.com/open-edge-platform/scenescape/tree/2026.1.0-rc1/tools/tracker/evaluation/README.md)
 - [TrackEval Toolkit](https://github.com/JonathonLuiten/TrackEval)
 - [TSN Traffic Shaping Guide](../common/enable-tsn-traffic-shaping.md)
 - [Create Scene and Cameras via API](./create-scene-camera-api.md)
 
-[cam-x1-mp4]: https://github.com/open-edge-platform/scenescape/blob/main/tests/system/metric/dataset/Cam_x1_0.mp4
-[cam-x2-mp4]: https://github.com/open-edge-platform/scenescape/blob/main/tests/system/metric/dataset/Cam_x2_0.mp4
-[cam-x1-json]: https://github.com/open-edge-platform/scenescape/blob/main/tests/system/metric/dataset/Cam_x1_0.json
-[cam-x2-json]: https://github.com/open-edge-platform/scenescape/blob/main/tests/system/metric/dataset/Cam_x2_0.json
+[cam-x1-mp4]: https://github.com/open-edge-platform/scenescape/blob/2026.1.0-rc1/tests/system/metric/dataset/Cam_x1_0.mp4
+[cam-x2-mp4]: https://github.com/open-edge-platform/scenescape/blob/2026.1.0-rc1/tests/system/metric/dataset/Cam_x2_0.mp4
+[cam-x1-json]: https://github.com/open-edge-platform/scenescape/blob/2026.1.0-rc1/tests/system/metric/dataset/Cam_x1_0.json
+[cam-x2-json]: https://github.com/open-edge-platform/scenescape/blob/2026.1.0-rc1/tests/system/metric/dataset/Cam_x2_0.json
+

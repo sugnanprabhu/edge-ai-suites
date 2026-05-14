@@ -1,3 +1,4 @@
+
 # Set Up SceneScape with Basler GigE Camera and PTP Support
 
 ## Configure the Basler Camera with PTP Support
@@ -15,7 +16,7 @@ for that profile. Follow the guides below before continuing:
 ```bash
 git clone https://github.com/open-edge-platform/scenescape
 cd scenescape
-git checkout origin/release-2026.1 -b release-2026.1
+git checkout 2026.1.0-rc1 -b 2026.1.0-rc1
 ```
 
 ---
@@ -86,3 +87,10 @@ your Basler camera and substitute it for `<basler-camera-serial>`:
 gencamsrc serial=<basler-camera-serial> pixel-format=bayerrggb frame-rate=10 name=source ! bayer2rgb ! videoscale ! video/x-raw,width=1920,height=1080 ! videoconvert ! \
 video/x-raw,format=BGR ! gvapython class=PostDecodeTimestampCapture function=processFrame module=/home/pipeline-server/user_scripts/gvapython/sscape/sscape_adapter.py name=timesync ! gvadetect model=/home/pipeline-server/models/intel/person-detection-retail-0013/FP32/person-detection-retail-0013.xml model-proc=/home/pipeline-server/models/object_detection/person/person-detection-retail-0013.json ! gvametaconvert add-tensor-data=true name=metaconvert ! gvapython class=PostInferenceDataPublish function=processFrame module=/home/pipeline-server/user_scripts/gvapython/sscape/sscape_adapter.py name=datapublisher ! gvametapublish name=destination ! appsink sync=true
 ```
+
+### Step 7: Camera feed to use for SceneScape Tracking
+
+Because SceneScape tracking quality depends on the camera feed, you can either configure
+the camera to match your real-world deployment settings or point the camera at a monitor
+that plays the queuing demo video. The latter option is easier to set up and is useful
+for validating SceneScape tracking behavior with a Basler camera.
