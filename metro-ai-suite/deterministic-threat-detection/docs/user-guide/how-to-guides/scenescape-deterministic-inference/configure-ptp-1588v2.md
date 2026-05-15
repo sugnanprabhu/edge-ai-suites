@@ -47,6 +47,12 @@ Run the following two commands in **separate terminals**:
    ```bash
    sudo ptp4l -i enp1s0 -4 -E -s -m --priority1=255 --domain=0
    ```
+   ## Important Notes
+
+   - **IP Address on Host Interface:** If you are using VLANs, ensure that your host's network
+   interface (e.g., `enp1s0`) has some IP address assigned before
+   starting the PTP daemon (`ptp4l`). UDP multicast PTP requires a routable address to
+   discover the Grandmaster.
 
 2. **Synchronize the System Clock (`phc2sys`).**
 
@@ -68,3 +74,4 @@ Run the following two commands in **separate terminals**:
 
    The `s2` state indicates the clock is in continuous tracking mode. An offset below
    ~100 ns is typical on a well-configured TSN network.
+
