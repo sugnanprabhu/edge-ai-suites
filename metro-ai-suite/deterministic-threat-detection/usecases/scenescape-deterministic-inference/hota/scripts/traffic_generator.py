@@ -33,10 +33,10 @@ def parse_args() -> argparse.Namespace:
   p.add_argument("--no-tls", action="store_true",
                  help="Disable TLS (default: TLS-insecure enabled)")
   p.add_argument("--topics", nargs="+",
-                 default=["scenescape/data/camera/atag-qcam1",
-                          "scenescape/data/camera/atag-qcam2"],
+                 default=["scenescape/data/camera/Cam_x1_0",
+                          "scenescape/data/camera/Cam_x2_0"],
                  help="MQTT topics that must reach frame 0 before traffic starts")
-  p.add_argument("--target", default="192.168.5.31",
+  p.add_argument("--target", default="127.0.0.1",
                  help="iperf3 server host (-c)")
   p.add_argument("--bitrate", default="960M",
                  help="iperf3 bitrate (-b), default: %(default)s")

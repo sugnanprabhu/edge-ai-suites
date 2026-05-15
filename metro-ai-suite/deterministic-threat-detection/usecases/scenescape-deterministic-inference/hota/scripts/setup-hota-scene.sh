@@ -23,7 +23,7 @@ SCENE_UID=$(curl -sf -X POST "$API/api/v1/scene" \
 echo "      Scene UID: $SCENE_UID"
 
 # 3. Add Cam_x1_0
-echo "[3/4] Adding camera: Cam_x1_0  (rtsp://192.168.127.23:8554/Cam_x1_0)"
+echo "[3/4] Adding camera: Cam_x1_0  (rtsp://localhost:8554/Cam_x1_0)"
 CAM1_UID=$(curl -sf -X POST "$API/api/v1/camera" \
   --insecure \
   -H "Authorization: Token $TOKEN" \
@@ -34,7 +34,7 @@ CAM1_UID=$(curl -sf -X POST "$API/api/v1/camera" \
 echo "      Camera 1 UID: $CAM1_UID"
 
 # 4. Add Cam_x2_0
-echo "[4/4] Adding camera: Cam_x2_0  (rtsp://192.168.127.23:8554/Cam_x2_0)"
+echo "[4/4] Adding camera: Cam_x2_0  (rtsp://localhost:8554/Cam_x2_0)"
 CAM2_UID=$(curl -sf -X POST "$API/api/v1/camera" \
   --insecure \
   -H "Authorization: Token $TOKEN" \

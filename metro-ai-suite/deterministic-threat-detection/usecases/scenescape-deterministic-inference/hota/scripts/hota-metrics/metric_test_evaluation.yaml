@@ -12,13 +12,13 @@ dataset:
   class: datasets.metric_test_dataset.MetricTestDataset
   config:
     data_path: ./dataset
-    cameras: [x1, x2]
+    cameras: [Cam_x1_0, Cam_x2_0]
     camera_fps: 30
 
 harness:
   class: harnesses.scene_controller_harness.SceneControllerHarness
   config:
-    container_image: scenescape-controller:2026.0.0
+    container_image: scenescape-controller:2026.1.0-rc1
     tracker_config_path: ./dataset/tracker-config.json
 
 evaluators:

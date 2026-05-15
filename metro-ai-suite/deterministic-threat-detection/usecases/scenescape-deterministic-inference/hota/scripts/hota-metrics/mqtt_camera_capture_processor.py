@@ -24,15 +24,13 @@ import paho.mqtt.client as mqtt
 # Configuration (hardcoded; promote to CLI args later if needed)
 # ---------------------------------------------------------------------------
 MAX_SAMPLES = 1856
-#MQTT_BROKER_HOST = "10.106.147.105"
-#MQTT_BROKER_HOST = "192.168.127.31"
 MQTT_BROKER_HOST = "127.0.0.1"
 MQTT_BROKER_PORT = 1883
 MQTT_KEEPALIVE = 60
 
 # Both cameras share the same wall-clock timestamps (verified via
 # compare of Cam_x1_0.json and Cam_x2_0.json), so one mapping is sufficient.
-TIMESTAMP_MAPPING_CSV = "Cam_x1_0_mapping.csv"
+TIMESTAMP_MAPPING_CSV = "frame_timestamp_mapping.csv"
 
 OUTPUT_DIRECTORY = "dataset"
 

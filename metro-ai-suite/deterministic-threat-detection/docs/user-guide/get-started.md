@@ -6,7 +6,7 @@ system in action.
 
 ## How It Works
 
-![DTD High-Level Architecture](./_assets/rtsp-deterministic-inference-architecture.svg)
+![DTD High-Level Architecture](./_assets/rtsp-dtd-architecture.svg)
 
 The use case involves multiple RTSP cameras streaming video to edge compute nodes for AI
 inference. Simultaneously, a sensor data producer generates telemetry data. Both inference
@@ -28,7 +28,7 @@ An aggregation node collects the MQTT messages and calculates the end-to-end lat
 
 ## Network Topology
 
-![TSN Network Topology](./_assets/TSN-Network-Topology.svg)
+![TSN Network Topology](./_assets/rtsp-dtd-network-topology.svg)
 
 The experimental setup consists of:
 

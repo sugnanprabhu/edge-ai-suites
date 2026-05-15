@@ -6,6 +6,17 @@ Precision Time Protocol (PTP) timestamping. The camera's hardware PTP timestamp 
 propagated through the GStreamer pipeline and published alongside inference results,
 enabling accurate end-to-end latency measurement in a TSN network.
 
+## How It Works
+
+![SceneScape deterministic threat detection architecture](./_assets/scenescape-dtd-architecture.svg)
+
+This use case uses camera streams from either Basler or RTSP cameras, processed by the
+DL Streamer Pipeline Server running inside the SceneScape environment for AI inference
+(person detection). The SceneScape controller consumes the inference results and then
+publishes person-tracking output. By injecting background traffic and then enabling TSN
+features, this demonstration shows how TSN delivers consistent, deterministic latency
+for critical data streams.
+
 ## Hardware Requirements
 
 | Component | Details |
@@ -19,11 +30,8 @@ enabling accurate end-to-end latency measurement in a TSN network.
 
 ## Network Topology
 
-```
-Basler GigE Camera/RTSP Camera ──┐
-                                 ├──  MOXA TSN Switch  ──  Arrow Lake Host (SceneScape)
-Basler GigE Camera/RTSP Camera ──┘
-```
+![TSN Network Topology](./_assets/scenescape-dtd-network-topology.svg)
+
 
 The MOXA switch acts as the PTP Grandmaster clock. The host machine and the Basler camera
 both synchronize to it. The camera hardware-stamps each frame with the PTP time, which is
