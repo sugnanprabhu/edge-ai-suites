@@ -73,5 +73,3 @@ OUTPUT_DIRECTORY = "dataset"     # Where reconstructed JSON files are written
 **Purpose:** GVAPython plugin that extracts the SEI-embedded frame number from each H.264 buffer before inference and adds it as `sei_frame_num` to the MQTT detection message.
 
 The UUID used to identify the SEI payload is `12345678-1234-5678-1234-567812345678`. This matches the UUID used when the test videos were prepared with `ffmpeg`.
-
----
