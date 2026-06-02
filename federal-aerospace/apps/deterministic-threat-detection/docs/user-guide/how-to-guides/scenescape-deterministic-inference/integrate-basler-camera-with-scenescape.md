@@ -78,11 +78,10 @@ git -C /path/to/scenescape apply \
 
 ### Step 6: Configure the GStreamer Pipeline
 
-Update the pipeline definition in SceneScape to use `gencamsrc` as the source and insert the `gvapython` timestamp capture element before inference. Note down the serial number of your Basler camera and substitute it for `<basler-camera-serial>`:
+Update the pipeline definition in SceneScape (eg: `dlstreamer-pipeline-server/queuing-config.json`) to use `gencamsrc` as the source and insert the `gvapython` timestamp capture element before inference. Note down the serial number of your Basler camera and substitute it for `<basler-camera-serial>`:
 
 ```text
-gencamsrc serial=<basler-camera-serial> pixel-format=bayerrggb frame-rate=10 name=source ! bayer2rgb ! videoscale ! video/x-raw,width=1920,height=1080 ! videoconvert ! \
-video/x-raw,format=BGR ! gvapython class=PostDecodeTimestampCapture function=processFrame module=/home/pipeline-server/user_scripts/gvapython/sscape/sscape_adapter.py name=timesync ! gvadetect model=/home/pipeline-server/models/intel/person-detection-retail-0013/FP32/person-detection-retail-0013.xml model-proc=/home/pipeline-server/models/object_detection/person/person-detection-retail-0013.json ! gvametaconvert add-tensor-data=true name=metaconvert ! gvapython class=PostInferenceDataPublish function=processFrame module=/home/pipeline-server/user_scripts/gvapython/sscape/sscape_adapter.py name=datapublisher ! gvametapublish name=destination ! appsink sync=true
+gencamsrc serial=<basler-camera-serial> pixel-format=bayerrggb frame-rate=10 name=source ! bayer2rgb ! videoscale ! video/x-raw,width=1920,height=1080 ! videoconvert ! video/x-raw,format=BGR ! gvapython class=PostDecodeTimestampCapture function=processFrame module=/home/pipeline-server/user_scripts/gvapython/sscape/sscape_adapter.py name=timesync ! gvadetect model=/home/pipeline-server/models/intel/person-detection-retail-0013/FP32/person-detection-retail-0013.xml model-proc=/home/pipeline-server/models/object_detection/person/person-detection-retail-0013.json ! gvametaconvert add-tensor-data=true name=metaconvert ! gvapython class=PostInferenceDataPublish function=processFrame module=/home/pipeline-server/user_scripts/gvapython/sscape/sscape_adapter.py name=datapublisher ! gvametapublish name=destination ! appsink sync=true
 ```
 
 > **Tip:** SceneScape tracking quality depends on the camera feed. You can either configure the camera for your real-world scene or point the camera at a monitor that plays the queuing demo video. The monitor-based setup is often the quickest way to validate Basler camera tracking behavior.

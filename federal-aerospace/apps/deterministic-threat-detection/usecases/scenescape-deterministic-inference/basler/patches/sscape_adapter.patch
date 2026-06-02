@@ -1,5 +1,5 @@
 diff --git a/dlstreamer-pipeline-server/user_scripts/gvapython/sscape/sscape_adapter.py b/dlstreamer-pipeline-server/user_scripts/gvapython/sscape/sscape_adapter.py
-index be9413a4..957a7b32 100644
+index be9413a4..491ed19a 100644
 --- a/dlstreamer-pipeline-server/user_scripts/gvapython/sscape/sscape_adapter.py
 +++ b/dlstreamer-pipeline-server/user_scripts/gvapython/sscape/sscape_adapter.py
 @@ -28,6 +28,7 @@ from sscape_policies import (
@@ -40,13 +40,13 @@ index be9413a4..957a7b32 100644
 +        try:
 +          meta = gst_buffer.get_reference_timestamp_meta(caps)
 +        except Exception as e:
-+          self.log.warning("Failed to read PTP reference timestamp meta: %s", e)
++          print("Failed to read PTP reference timestamp meta: %s", e)
 +          meta = None
 +        if meta is not None:
 +          frame_ptp_timestamp = f"{datetime.fromtimestamp(meta.timestamp/1e9, tz=timezone(TIMEZONE)).strftime(DATETIME_FORMAT)[:-3]}Z"
-+          self.log.debug("PTP META timestamp: %s", frame_ptp_timestamp)
++          print("PTP META timestamp: %s", frame_ptp_timestamp)
 +        else:
-+          self.log.debug("PTP META is not available in the gst buffer")
++          print("PTP META is not available in the gst buffer")
 +      ## end of debugging timestamp meta
 +
 +      self.buildObjData(gvametadata, frame_ptp_timestamp)
