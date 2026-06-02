@@ -17,7 +17,7 @@ MOTA, and IDF1 metrics.
 
 | Component | Details |
 |-----------|---------|
-| **Basler ace 2 Camera (A2440-20GM)** | GigE Vision camera with IEEE 1588v2 PTP hardware timestamping support |
+| **Basler ace U Camera (acA1920-40GC)** | GigE Vision camera with IEEE 1588v2 PTP hardware timestamping support |
 | **AXIS RTSP Camera P3265-LVE** | General RTSP camera with optional support of NTP |
 | **MOXA TSN Switch** | Managed switch supporting IEEE 802.1AS (gPTP), IEEE 802.1Qbv (Time-Aware Shaper), and IEEE 1588v2 |
 | **Arrow Lake Host Machine** | Linux-based system with an Intel i226 TSN-capable network card |

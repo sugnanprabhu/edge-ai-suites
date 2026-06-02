@@ -1,5 +1,8 @@
 # Set Up SceneScape with Basler GigE Camera and PTP Support
 
+## Choose a Camera That Supports PTP
+Use a Basler GigE camera model that supports IEEE 1588v2 PTP hardware timestamping. The Basler ace U series (for example, acA1920-40GC) is a validated option.
+
 ## Configure the Basler Camera with PTP Support
 
 The Basler camera only supports IEEE 1588v2 over UDP, so the switch and host must be configured for that profile. Follow the guides below before continuing:
