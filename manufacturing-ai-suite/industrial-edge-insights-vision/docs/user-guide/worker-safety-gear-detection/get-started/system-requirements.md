@@ -13,8 +13,8 @@ This page provides detailed hardware, software, and platform requirements to hel
 
 | **Component**      | **Minimum Requirement**   | **Recommended**         |
 |--------------------|---------------------------|-------------------------|
-| **Memory**          | 16 GB                     | 16 GB                   |
-| **Disk Space**      | 64 GB                | 128 GB               |
+| **Memory**         | 16 GB                     | 32 GB                   |
+| **Disk Space**     | 64 GB                     | 128 GB                  |
 
 ### Validated Platforms
 

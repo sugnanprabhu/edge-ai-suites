@@ -13,7 +13,7 @@ and run the application efficiently.
 
 | **Component**       | **Minimum Requirement** | **Recommended**         |
 |---------------------|-------------------------|-------------------------|
-| **Memory**          | 8 GB                    | 16 GB                   |
+| **Memory**          | 8 GB                    | 32 GB                   |
 | **Disk Space**      | 128 GB SSD              | 256 GB SSD              |
 | **GPU/Accelerator** | Integrated GPU          | Integrated/Discrete GPU |
 

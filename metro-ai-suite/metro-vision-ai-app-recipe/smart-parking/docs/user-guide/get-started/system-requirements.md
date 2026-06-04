@@ -12,7 +12,7 @@ This section provides detailed hardware, software, and platform requirements to 
 
 | **Component**       | **Minimum Requirement** | **Recommended**         |
 |---------------------|-------------------------|-------------------------|
-| **Memory**          | 8 GB                    | 16 GB                   |
+| **Memory**          | 16 GB                   | 32 GB                   |
 | **Disk Space**      | 128 GB SSD              | 256 GB SSD              |
 | **GPU/Accelerator** | Integrated GPU          | Integrated/Discrete GPU |
 
