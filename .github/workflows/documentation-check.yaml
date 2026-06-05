@@ -168,7 +168,7 @@ jobs:
     if: ${{ needs.filter.outputs.deterministic-threat-detection_changed == 'true' }}
     uses: ./.github/workflows/docs-reusable-workflow.yaml
     with:
-      docs_directory: federal-aerospace/deterministic-threat-detection
+      docs_directory: federal-aerospace/docs/deterministic-threat-detection
 
   build-image-based-video-search:
     permissions:
