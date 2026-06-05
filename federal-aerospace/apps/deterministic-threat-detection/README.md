@@ -54,6 +54,13 @@ cd deterministic-threat-detection
 
 ---
 
+## Documentation
+
+- [Get Started — Use Case 1](./docs/user-guide/get-started.md)
+- [Get Started — Use Case 2](./docs/user-guide/get-started-scenescape.md)
+- [How-to Guides](./docs/user-guide/how-to-guides.md)
+- [Release Notes](./docs/user-guide/release-notes.md)
+
 ## Key References
 
 - **MOXA TSN-G5000:** [PTP Grandmaster, VLAN segmentation, IEEE 802.1Qbv shaping](https://www.moxa.com/en/products/industrial-network-infrastructure/ethernet-switches/en-50155-switches/tsn-g5004-series)
