@@ -32,6 +32,8 @@ Basler GigE cameras hardware-timestamp each frame with IEEE 1588v2 PTP. A patche
 - [How-to Guides](../../docs/deterministic-threat-detection/user-guide/how-to-guides.md)
 - [Release Notes](../../docs/deterministic-threat-detection/user-guide/release-notes.md)
 
+---
+
 ## Application Deployment
 
 ### Option 1 — Git Clone
@@ -54,6 +56,8 @@ cd deterministic-threat-detection
 ```
 
 > **Note:** The documentation assumes paths relative to the `edge-ai-suites/federal-aerospace/apps/deterministic-threat-detection` directory. If you used the ZIP archive, replace `edge-ai-suites/federal-aerospace/apps/deterministic-threat-detection` with the path to your extracted `deterministic-threat-detection` folder wherever it appears in the guides.
+
+---
 
 ## Key References
 
