@@ -69,7 +69,7 @@ jobs:
             edge-insights-vision:
               - 'manufacturing-ai-suite/industrial-edge-insights-vision/docs/user-guide/**'
             deterministic-threat-detection:
-              - 'federal-aerospacei/docs/deterministic-threat-detection/user-guide/**'
+              - 'federal-aerospace/docs/deterministic-threat-detection/user-guide/**'
             image-based-video-search:
               - 'metro-ai-suite/image-based-video-search/docs/user-guide/**'
             live-metrics-service:
