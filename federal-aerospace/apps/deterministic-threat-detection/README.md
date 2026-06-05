@@ -21,16 +21,11 @@ This project demonstrates two complementary use cases for industrial edge AI, bo
 
 RTSP camera streams from AXIS cameras are processed by DL Streamer for person detection. Inference results and simulated sensor telemetry are published over MQTT with PTP timestamps. An MQTT aggregation node measures end-to-end latency in real time, demonstrating how TSN protects critical streams from iperf3 background congestion.
 
-[Get Started — Use Case 1](../../docs/deterministic-threat-detection/user-guide/get-started.md) — SceneScape Multi-Camera Tracking with TSN and PTP
+[Get Started — Use Case 1](../../docs/deterministic-threat-detection/user-guide/get-started.md)
 
 Basler GigE cameras hardware-timestamp each frame with IEEE 1588v2 PTP. A patched GStreamer pipeline propagates these timestamps through DL Streamer into Intel® SceneScape for 3D multi-camera tracking. This use case measures how TSN congestion affects HOTA tracking accuracy and demonstrates that traffic shaping restores accuracy to baseline.
 
 [Get Started — Use Case 2](../../docs/deterministic-threat-detection/user-guide/get-started-scenescape.md)
-
-- [Get Started — Use Case 1](../../docs/deterministic-threat-detection/user-guide/get-started.md)
-- [Get Started — Use Case 2](../../docs/deterministic-threat-detection/user-guide/get-started-scenescape.md)
-- [How-to Guides](../../docs/deterministic-threat-detection/user-guide/how-to-guides.md)
-- [Release Notes](../../docs/deterministic-threat-detection/user-guide/release-notes.md)
 
 ---
 
