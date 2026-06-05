@@ -4,30 +4,6 @@ Welcome to the documentation for the Deterministic Threat Detection project—a 
 
 ---
 
-## Application Deployment
-
-### Option 1 — Git Clone
-
-Clone the full repository and navigate to the application directory:
-
-```bash
-git clone https://github.com/open-edge-platform/edge-ai-suites.git
-cd edge-ai-suites/federal-aerospace/apps/deterministic-threat-detection
-```
-
-### Option 2 — Download ZIP Archive
-
-Download and extract the standalone application package:
-
-```bash
-curl -OjL https://github.com/open-edge-platform/edge-ai-suites/releases/download/fedaero-latest/deterministic-threat-detection.zip
-unzip deterministic-threat-detection.zip
-cd deterministic-threat-detection
-```
-
-> **Note:** The documentation assumes paths relative to the `edge-ai-suites/federal-aerospace/apps/deterministic-threat-detection` directory. If you used the ZIP archive, replace `edge-ai-suites/federal-aerospace/apps/deterministic-threat-detection` with the path to your extracted `deterministic-threat-detection` folder wherever it appears in the guides.
-
-
 ## Overview
 
 ![Deterministic Threat Detection Architecture](../../docs/deterministic-threat-detection/user-guide/_assets/common-deterministic-threat-detection-architecture.svg)
@@ -55,6 +31,29 @@ Basler GigE cameras hardware-timestamp each frame with IEEE 1588v2 PTP. A patche
 - [Get Started — Use Case 2](../../docs/deterministic-threat-detection/user-guide/get-started-scenescape.md)
 - [How-to Guides](../../docs/deterministic-threat-detection/user-guide/how-to-guides.md)
 - [Release Notes](../../docs/deterministic-threat-detection/user-guide/release-notes.md)
+
+## Application Deployment
+
+### Option 1 — Git Clone
+
+Clone the full repository and navigate to the application directory:
+
+```bash
+git clone https://github.com/open-edge-platform/edge-ai-suites.git
+cd edge-ai-suites/federal-aerospace/apps/deterministic-threat-detection
+```
+
+### Option 2 — Download ZIP Archive
+
+Download and extract the standalone application package:
+
+```bash
+curl -OjL https://github.com/open-edge-platform/edge-ai-suites/releases/download/fedaero-latest/deterministic-threat-detection.zip
+unzip deterministic-threat-detection.zip
+cd deterministic-threat-detection
+```
+
+> **Note:** The documentation assumes paths relative to the `edge-ai-suites/federal-aerospace/apps/deterministic-threat-detection` directory. If you used the ZIP archive, replace `edge-ai-suites/federal-aerospace/apps/deterministic-threat-detection` with the path to your extracted `deterministic-threat-detection` folder wherever it appears in the guides.
 
 ## Key References
 
