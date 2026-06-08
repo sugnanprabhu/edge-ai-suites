@@ -24,7 +24,7 @@ An aggregation node collects the MQTT messages and calculates the end-to-end lat
 ## System Requirements
 
 ### Software Requirements
-- **Operating System:** Ubuntu 22.04 or later
+- **Operating System:** Ubuntu 24.04 or later
 - **Docker Engine** with Docker Compose V2
 - [**DL Streamer Pipeline Server**](https://github.com/open-edge-platform/edge-ai-libraries/tree/release-2026.1.0/microservices/dlstreamer-pipeline-server)
 
