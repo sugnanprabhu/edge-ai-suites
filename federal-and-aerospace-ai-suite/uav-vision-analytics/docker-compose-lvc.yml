@@ -1,0 +1,355 @@
+# SPDX-FileCopyrightText: (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+#
+# UAV Vision Analytics — Standalone (pymavlink) mode + Live Video Captioning (LVC).
+#
+# This file is a self-contained superset of docker-compose-pymavlink.yml: it
+# keeps the full UAV telemetry/detection stack (px4, mavlink-router, broker,
+# dlstreamer-pipeline-server, metrics-manager, nginx) and adds a dedicated
+# captioning stack (mediamtx, coturn, lvc-pipeline-server, video-caption-service)
+# pulled from Docker Hub (intel/video-caption-service). The captioning pipeline
+# server consumes the UAV's own annotated RTSP output (telemetry overlay +
+# detection, published by the `dlstreamer-pipeline-server` service below) and
+# generates live captions, viewable in the LVC web dashboard.
+#
+# Usage:
+#   make init                              # creates .env, detects GPU/NPU/camera
+#   make model                             # download YOLO11s detection model
+#   # download a VLM captioning model into ./resources/ov_models, e.g.:
+#   #   ./model_download_scripts/download_models.sh \
+#   #       --model OpenGVLab/InternVL2-1B --type vlm --weight-format int8
+#   # (see live-video-captioning/model_download_scripts/download_models.sh)
+#   docker compose -f docker-compose-lvc.yml up -d
+#   make start-rtsp DEVICE=gpu             # start the UAV annotated RTSP stream
+#   # open the LVC dashboard at http://<HOST_IP>:4173 and select the
+#   # "Video_Captioning_RTSP_Software" (or _Hardware) pipeline — the RTSP
+#   # source field is pre-filled with the UAV's annotated stream.
+
+services:
+
+  broker:
+    image: docker.io/library/eclipse-mosquitto:2.0.22
+    container_name: broker
+    environment:
+      - http_proxy=${http_proxy}
+      - https_proxy=${https_proxy}
+      - no_proxy=${no_proxy},${HOST_IP}
+      - NO_PROXY=${no_proxy},${HOST_IP}
+    volumes:
+      - ./configs/mosquitto:/mosquitto/config
+    networks:
+      - app_network
+    restart: on-failure:5
+
+  px4:
+    image: px4io/px4-sitl:latest
+    hostname: px4-sitl
+    container_name: px4
+    volumes:
+      - ./10040_sihsim_quadx.post:/opt/px4/etc/init.d-posix/airframes/10040_sihsim_quadx.post
+    stdin_open: true
+    tty: true
+    networks:
+      - app_network
+    depends_on:
+       - mavlink-router
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  mavlink-router:
+    build:
+      context: ../uav-mission-compute-sdk/infra/px4-sim/mavlink-router
+      dockerfile: Dockerfile
+      args:
+        http_proxy:  ${http_proxy:-}
+        https_proxy: ${https_proxy:-}
+        no_proxy:    ${no_proxy:-localhost,127.0.0.0/8}
+        NO_PROXY:    ${NO_PROXY:-localhost,127.0.0.0/8}
+    container_name: mavlink-router
+    restart: unless-stopped
+    volumes:
+      - ./configs/mavlink-router/main.conf:/etc/mavlink-router/main.conf
+    networks:
+      - app_network
+
+  dlstreamer-pipeline-server:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM ${DLSTREAMER_PIPELINE_SERVER_IMAGE}
+        RUN pip install --no-cache-dir pymavlink
+    image: ${DLSTREAMER_PIPELINE_SERVER_IMAGE}-pymavlink
+    pull_policy: build
+    container_name: dlstreamer-pipeline-server
+    environment:
+      - http_proxy=${http_proxy}
+      - https_proxy=${https_proxy}
+      - no_proxy=${no_proxy},${HOST_IP},host.docker.internal
+      - NO_PROXY=${no_proxy},${HOST_IP},host.docker.internal
+      - ENABLE_WEBRTC=true
+      - ENABLE_RTSP=true
+      - RTSP_PORT=8555
+      - APPEND_PIPELINE_NAME_TO_PUBLISHER_TOPIC=true
+      - RUN_MODE=EVA
+      - EMIT_SOURCE_AND_DESTINATION=true
+      - REST_SERVER_PORT=8081
+      - SERVICE_NAME=dlstreamer-pipeline-server
+      - MQTT_HOST=broker
+      - MQTT_PORT=1883
+      - ENABLE_OPEN_TELEMETRY=true
+      # NPU related environment variables
+      - ZE_ENABLE_ALT_DRIVERS=libze_intel_npu.so
+      - NPU_DEVICE=${NPU_DEVICE:-/dev/null}
+    volumes:
+      - dlstreamer-pipeline-server-pipeline-root:/var/cache/pipeline_root:uid=1999,gid=1999
+      - "./resources:/home/pipeline-server/resources"
+      - "./configs/config-pymavlink.json:/home/pipeline-server/config.json"
+      - "./gvapython/telemetry-overlay-pymavlink.py:/home/pipeline-server/gvapython/telemetry-overlay-pymavlink.py"
+      - "./scripts/mavlink_pipeline_manager.py:/home/pipeline-server/scripts/pipeline_manager.py"
+      - "/run/udev:/run/udev:ro"
+      - "/tmp:/tmp"
+      - "${REALSENSE_DEVICE:-/dev/null}:/dev/video4"
+    group_add:
+      - "44"
+      - "109"
+      - "110"
+      - "990"
+      - "992"
+      - "993"
+      - "994"
+      - "996"
+    device_cgroup_rules:
+      - "c 189:* rmw"
+      - "c 209:* rmw"
+      - "a 189:* rwm"
+    devices:
+      - ${GPU_DEVICE:-/dev/dri/card0}:${GPU_DEVICE:-/dev/dri/card0}
+      - ${GPU_RENDER_DEVICE:-/dev/dri/renderD128}:${GPU_RENDER_DEVICE:-/dev/dri/renderD128}
+      - ${NPU_DEVICE:-/dev/null}:${NPU_DEVICE:-/dev/null}
+    networks:
+      - app_network
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 5
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  metrics-manager:
+    image: intel/metrics-manager:2026.2.0
+    container_name: metrics-manager
+    privileged: true
+    pid: host
+    devices:
+      - /dev/dri            # Intel GPU — card0 + renderD128 required for qmassa
+    volumes:
+      - /sys:/sys:ro
+      - /run:/run:ro        # required by the GPU/NPU readers (qmassa)
+    # Published so the dashboard's browser-side metrics widget (which
+    # connects directly to this port, bypassing video-caption-service) can
+    # reach the SSE stream at http://<HOST_IP>:${METRICS_SERVICE_PORT}/metrics/stream.
+    ports:
+      - "${HOST_IP:-127.0.0.1}:${METRICS_SERVICE_PORT:-9090}:9090"
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9090/health', timeout=8)" ]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - app_network
+
+  # Nginx reverse proxy / TLS — the only service that publishes
+  # ports to the host. Binds to HOST_IP (falls back to loopback-only when
+  # HOST_IP is unset) rather than all interfaces.
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nginx
+    restart: unless-stopped
+    volumes:
+      - ./configs/nginx/nginx-pymavlink.conf:/etc/nginx/nginx.conf:ro
+      - ./configs/nginx/ssl:/etc/nginx/ssl:ro
+    ports:
+      - "${HOST_IP:-127.0.0.1}:80:80"
+      - "${HOST_IP:-127.0.0.1}:443:443"
+      - "${HOST_IP:-127.0.0.1}:8555:8555"
+    networks:
+      - app_network
+    depends_on:
+      - dlstreamer-pipeline-server
+      - metrics-manager
+
+  # --- Live Video Captioning additions below ---
+
+  # WebRTC media server: receives frames from lvc-pipeline-server and serves
+  # them (WHIP/WHEP) to the LVC dashboard in the browser.
+  mediamtx:
+    image: bluenviron/mediamtx:1.15.6
+    container_name: mediamtx
+    environment:
+      - no_proxy=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,${no_proxy}
+      - NO_PROXY=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,${NO_PROXY:-}
+      - http_proxy=${http_proxy}
+      - HTTP_PROXY=${http_proxy}
+      - https_proxy=${https_proxy}
+      - HTTPS_PROXY=${https_proxy}
+      - MTX_LOGLEVEL=info
+      - MTX_API=no
+      - MTX_RTSP=no
+      - MTX_RTMP=no
+      - MTX_SRT=no
+      - MTX_HLS=no
+      - MTX_WEBRTCTRACKGATHERTIMEOUT=30s
+      - MTX_WEBRTCADDRESS=:8889
+      - MTX_WEBRTCADDITIONALHOSTS=${HOST_IP:-localhost}
+      - MTX_WEBRTCICESERVERS2_0_URL=turn:${HOST_IP:-localhost}:3478
+      - MTX_WEBRTCICESERVERS2_0_USERNAME=${MTX_WEBRTCICESERVERS2_0_USERNAME:-localhost}
+      - MTX_WEBRTCICESERVERS2_0_PASSWORD=${MTX_WEBRTCICESERVERS2_0_PASSWORD:-localpass}
+    ports:
+      - "${HOST_IP:-127.0.0.1}:${WHIP_SERVER_PORT:-8889}:8889"
+      - "${HOST_IP:-127.0.0.1}:8189:8189/udp"
+    restart: unless-stopped
+    networks:
+      - app_network
+
+  # TURN/STUN fallback for WebRTC when peer-to-peer ICE fails.
+  coturn:
+    image: coturn/coturn:4.12
+    container_name: coturn
+    environment:
+      - no_proxy=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,${no_proxy}
+      - NO_PROXY=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,${NO_PROXY:-}
+      - http_proxy=${http_proxy}
+      - HTTP_PROXY=${http_proxy}
+      - https_proxy=${https_proxy}
+      - HTTPS_PROXY=${https_proxy}
+    ports:
+      - "${HOST_IP:-127.0.0.1}:3478:3478/udp"
+      - "${HOST_IP:-127.0.0.1}:19302:3478/udp"
+    command: [ "-v" ]
+    networks:
+      - app_network
+
+  # Dedicated DL Streamer Pipeline Server instance for captioning. Kept
+  # separate from the UAV detection/telemetry `dlstreamer-pipeline-server`
+  # above so the two pipeline sets (and their REST `/pipelines` listings)
+  # don't collide — it pulls its RTSP *source* from that UAV stream.
+  lvc-pipeline-server:
+    image: ${DLSTREAMER_PIPELINE_SERVER_IMAGE:-intel/dlstreamer-pipeline-server:2026.2.0-ubuntu24}
+    hostname: lvc-pipeline-server
+    container_name: lvc-pipeline-server
+    privileged: true
+    tty: true
+    entrypoint: [ "./run.sh" ]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - no_proxy=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,broker,dlstreamer-pipeline-server,${no_proxy}
+      - NO_PROXY=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,broker,dlstreamer-pipeline-server,${NO_PROXY:-}
+      - http_proxy=${http_proxy}
+      - HTTP_PROXY=${http_proxy}
+      - https_proxy=${https_proxy}
+      - HTTPS_PROXY=${https_proxy}
+      - RUN_MODE=EVA
+      - ENABLE_RTSP=false
+      - ENABLE_WEBRTC=true
+      - REST_SERVER_PORT=8080
+      - ADD_UTCTIME_TO_METADATA=true
+      - LSFEATURE_NAME="EVAM"
+      - HTTPS=false
+      - MTLS_VERIFICATION=false
+      - APPEND_PIPELINE_NAME_TO_PUBLISHER_TOPIC=false
+      - WEBRTC_SIGNALING_SERVER=http://mediamtx:8889
+      - MQTT_HOST=broker
+      - MQTT_PORT=1883
+      - GST_DEBUG=1
+    volumes:
+      - lvc-pipeline-server-root:/var/cache/pipeline_root:uid=1999,gid=1999
+      - "/run/udev:/run/udev:ro"
+      - "/tmp:/tmp"
+      - "./resources/ov_models:/home/pipeline-server/models"
+      - "./resources/ov_detection_models:/home/pipeline-server/detection_models"
+      - "./configs/config-lvc-captioning.json:/home/pipeline-server/config.json:ro"
+    group_add:
+      - "109"
+      - "110"
+      - "992"
+    device_cgroup_rules:
+      - "c 189:* rmw"
+      - "c 209:* rmw"
+      - "a 189:* rwm"
+    devices:
+      - ${GPU_DEVICE:-/dev/dri/card0}:${GPU_DEVICE:-/dev/dri/card0}
+      - ${GPU_RENDER_DEVICE:-/dev/dri/renderD128}:${GPU_RENDER_DEVICE:-/dev/dri/renderD128}
+      - ${NPU_DEVICE:-/dev/null}:${NPU_DEVICE:-/dev/null}
+    ports:
+      - "${HOST_IP:-127.0.0.1}:${EVAM_HOST_PORT:-8040}:8080"
+    networks:
+      - app_network
+    depends_on:
+      - mediamtx
+      - broker
+      - dlstreamer-pipeline-server
+
+  # LVC web dashboard + REST API, pulled from Docker Hub.
+  video-caption-service:
+    image: ${REGISTRY:-intel/}video-caption-service:${TAG:-latest}
+    container_name: video-caption-service
+    environment:
+      - no_proxy=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,broker,${no_proxy}
+      - NO_PROXY=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,broker,${NO_PROXY:-}
+      - http_proxy=${http_proxy}
+      - HTTP_PROXY=${http_proxy}
+      - https_proxy=${https_proxy}
+      - HTTPS_PROXY=${https_proxy}
+      - DASHBOARD_PORT=4173
+      - PIPELINE_SERVER_URL=http://lvc-pipeline-server:8080
+      - MQTT_BROKER_HOST=broker
+      - MQTT_BROKER_PORT=1883
+      - MQTT_TOPIC_PREFIX=live-video-captioning
+      - WEBRTC_PEER_ID=${WEBRTC_PEER_ID:-stream}
+      - SIGNALING_URL=http://${HOST_IP:-localhost}:${WHIP_SERVER_PORT:-8889}
+      - ALERT_MODE=${ALERT_MODE:-false}
+      # Pre-fills the dashboard's RTSP source field with the UAV's own
+      # annotated (telemetry + detection overlay) stream.
+      - DEFAULT_RTSP_URL=${DEFAULT_RTSP_URL:-rtsp://dlstreamer-pipeline-server:8555/uav-mavlink-gpu}
+      - ENABLE_DETECTION_PIPELINE=${ENABLE_DETECTION_PIPELINE:-false}
+      - CAPTION_HISTORY=${CAPTION_HISTORY:-3}
+      - VLM_CACHE_SIZE=${VLM_CACHE_SIZE:-4}
+      - METRICS_SERVICE_PORT=${METRICS_SERVICE_PORT:-9090}
+      - NPU_MAX_PROMPT_LENGTH=${NPU_MAX_PROMPT_LENGTH:-1024}
+      - NPU_MIN_RESPONSE_LENGTH=${NPU_MIN_RESPONSE_LENGTH:-128}
+    volumes:
+      - "./resources/ov_models:/app/ov_models:ro"
+      - "./resources/ov_detection_models:/app/ov_detection_models:ro"
+    ports:
+      - "${HOST_IP:-127.0.0.1}:${DASHBOARD_PORT:-4173}:4173"
+    healthcheck:
+      test: [ "CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4173/api/health', timeout=8)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - lvc-pipeline-server
+      - mediamtx
+      - broker
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: "bridge"
+
+volumes:
+  dlstreamer-pipeline-server-pipeline-root:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+  lvc-pipeline-server-root:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs

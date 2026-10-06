@@ -8,6 +8,10 @@ endif
 
 COMPOSE_PYMAV  := docker-compose-pymavlink.yml
 COMPOSE_SDK := docker-compose-uavsdk.yml
+COMPOSE_LVC := docker-compose-lvc.yml
+VLM_MODEL      ?= OpenGVLab/InternVL2-1B
+VLM_PRECISION  ?= int8
+DETECTION_MODEL ?= yolov8s
 DLSPS          := dlstreamer-pipeline-server
 MODEL_DIR      := resources/models/yolo11s
 MODEL_XML      := $(MODEL_DIR)/yolo11s_openvino_model/yolo11s.xml
@@ -18,7 +22,8 @@ SSL_DIR        := configs/nginx/ssl
 .PHONY: help init build model _check_model _check_certs _check_venv_pkg \
         pymav-up pymav-down \
         uavsdk-up uavsdk-down \
-        start-rtsp
+        start-rtsp \
+        lvc-model lvc-up lvc-down
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / \
@@ -169,6 +174,17 @@ start-rtsp: ## Start RTSP pipelines. DEVICE=cpu|gpu|npu|all (default: gpu)
 	  -e PIPELINE_DEVICE=$(DEVICE) \
 	  $(DLSPS) bash -c \
 	  "python3 /home/pipeline-server/scripts/pipeline_manager.py --sink rtsp"
+
+# ── Live Video Captioning (docker-compose-lvc.yml) ─────────────────────────────
+
+lvc-model: ## Download VLM captioning model (VLM_MODEL=, VLM_PRECISION=int4|int8|fp16) into resources/ov_models
+	bash scripts/download_lvc_models.sh --model $(VLM_MODEL) --type vlm --weight-format $(VLM_PRECISION)
+
+lvc-up: _check_model _check_certs ## Start UAV stack + Live Video Captioning (requires 'make lvc-model' first)
+	docker compose -f $(COMPOSE_LVC) up -d
+
+lvc-down: ## Stop and remove the UAV + Live Video Captioning stack (includes volumes)
+	docker compose -f $(COMPOSE_LVC) down -v
 
 # ── Convenience alias ─────────────────────────────────────────────────────────
 
