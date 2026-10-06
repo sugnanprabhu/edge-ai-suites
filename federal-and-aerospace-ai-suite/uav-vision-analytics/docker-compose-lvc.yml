@@ -5,12 +5,18 @@
 #
 # This file is a self-contained superset of docker-compose-pymavlink.yml: it
 # keeps the full UAV telemetry/detection stack (px4, mavlink-router, broker,
-# dlstreamer-pipeline-server, metrics-manager, nginx) and adds a dedicated
-# captioning stack (mediamtx, coturn, lvc-pipeline-server, video-caption-service)
-# pulled from Docker Hub (intel/video-caption-service). The captioning pipeline
-# server consumes the UAV's own annotated RTSP output (telemetry overlay +
-# detection, published by the `dlstreamer-pipeline-server` service below) and
-# generates live captions, viewable in the LVC web dashboard.
+# dlstreamer-pipeline-server, metrics-manager, nginx) and adds captioning
+# support (mediamtx, coturn, video-caption-service — the dashboard pulled from
+# Docker Hub, intel/video-caption-service).
+#
+# A SINGLE `dlstreamer-pipeline-server` instance runs both the UAV's own
+# detection/telemetry pipelines (configs/config-pymavlink.json) and LVC's VLM
+# captioning pipelines (configs/config-lvc-captioning.json), merged into
+# configs/config-combined.json. The UAV's custom `-pymavlink` image already
+# bundles `gvagenai` (same DL Streamer base as the stock LVC image), so no
+# second pipeline-server container is needed. Captioning pipelines consume
+# the server's own annotated RTSP output (telemetry overlay + detection) as
+# their source, looping back within the same container.
 #
 # Usage:
 #   make init                              # creates .env, detects GPU/NPU/camera
@@ -84,8 +90,14 @@ services:
     environment:
       - http_proxy=${http_proxy}
       - https_proxy=${https_proxy}
-      - no_proxy=${no_proxy},${HOST_IP},host.docker.internal
-      - NO_PROXY=${no_proxy},${HOST_IP},host.docker.internal
+      # Includes its own hostname/localhost so the captioning pipelines'
+      # loopback RTSP connection (rtsp://dlstreamer-pipeline-server:8555/...,
+      # consuming the server's own detection+telemetry output) isn't routed
+      # through the corporate HTTP proxy, plus mediamtx (WHIP/WebRTC
+      # signalling destination) and broker (MQTT, in case any HTTP-aware
+      # client library in this container inspects proxy env vars for it).
+      - no_proxy=${no_proxy},${HOST_IP},host.docker.internal,dlstreamer-pipeline-server,localhost,127.0.0.1,mediamtx,coturn,broker,video-caption-service
+      - NO_PROXY=${no_proxy},${HOST_IP},host.docker.internal,dlstreamer-pipeline-server,localhost,127.0.0.1,mediamtx,coturn,broker,video-caption-service
       - ENABLE_WEBRTC=true
       - ENABLE_RTSP=true
       - RTSP_PORT=8555
@@ -97,18 +109,27 @@ services:
       - MQTT_HOST=broker
       - MQTT_PORT=1883
       - ENABLE_OPEN_TELEMETRY=true
+      # --- Live Video Captioning additions (merged into this single server) ---
+      - WEBRTC_SIGNALING_SERVER=http://mediamtx:8889
+      - ADD_UTCTIME_TO_METADATA=true
+      - HTTPS=false
+      - MTLS_VERIFICATION=false
       # NPU related environment variables
       - ZE_ENABLE_ALT_DRIVERS=libze_intel_npu.so
       - NPU_DEVICE=${NPU_DEVICE:-/dev/null}
     volumes:
       - dlstreamer-pipeline-server-pipeline-root:/var/cache/pipeline_root:uid=1999,gid=1999
       - "./resources:/home/pipeline-server/resources"
-      - "./configs/config-pymavlink.json:/home/pipeline-server/config.json"
+      - "./configs/config-combined.json:/home/pipeline-server/config.json"
       - "./gvapython/telemetry-overlay-pymavlink.py:/home/pipeline-server/gvapython/telemetry-overlay-pymavlink.py"
       - "./scripts/mavlink_pipeline_manager.py:/home/pipeline-server/scripts/pipeline_manager.py"
       - "/run/udev:/run/udev:ro"
       - "/tmp:/tmp"
       - "${REALSENSE_DEVICE:-/dev/null}:/dev/video4"
+      # VLM/detection model stores used by the merged captioning pipelines
+      # (path convention required by LVC's captioner-properties model-path).
+      - "./resources/ov_models:/home/pipeline-server/models"
+      - "./resources/ov_detection_models:/home/pipeline-server/detection_models"
     group_add:
       - "44"
       - "109"
@@ -128,6 +149,9 @@ services:
       - ${NPU_DEVICE:-/dev/null}:${NPU_DEVICE:-/dev/null}
     networks:
       - app_network
+    depends_on:
+      - broker
+      - mediamtx
     deploy:
       restart_policy:
         condition: on-failure
@@ -182,14 +206,14 @@ services:
 
   # --- Live Video Captioning additions below ---
 
-  # WebRTC media server: receives frames from lvc-pipeline-server and serves
-  # them (WHIP/WHEP) to the LVC dashboard in the browser.
+  # WebRTC media server: receives frames from dlstreamer-pipeline-server and
+  # serves them (WHIP/WHEP) to the LVC dashboard in the browser.
   mediamtx:
     image: bluenviron/mediamtx:1.15.6
     container_name: mediamtx
     environment:
-      - no_proxy=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,${no_proxy}
-      - NO_PROXY=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,${NO_PROXY:-}
+      - no_proxy=localhost,127.0.0.1,mediamtx,coturn,dlstreamer-pipeline-server,video-caption-service,${no_proxy}
+      - NO_PROXY=localhost,127.0.0.1,mediamtx,coturn,dlstreamer-pipeline-server,video-caption-service,${NO_PROXY:-}
       - http_proxy=${http_proxy}
       - HTTP_PROXY=${http_proxy}
       - https_proxy=${https_proxy}
@@ -218,8 +242,8 @@ services:
     image: coturn/coturn:4.12
     container_name: coturn
     environment:
-      - no_proxy=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,${no_proxy}
-      - NO_PROXY=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,${NO_PROXY:-}
+      - no_proxy=localhost,127.0.0.1,mediamtx,coturn,dlstreamer-pipeline-server,video-caption-service,${no_proxy}
+      - NO_PROXY=localhost,127.0.0.1,mediamtx,coturn,dlstreamer-pipeline-server,video-caption-service,${NO_PROXY:-}
       - http_proxy=${http_proxy}
       - HTTP_PROXY=${http_proxy}
       - https_proxy=${https_proxy}
@@ -231,80 +255,22 @@ services:
     networks:
       - app_network
 
-  # Dedicated DL Streamer Pipeline Server instance for captioning. Kept
-  # separate from the UAV detection/telemetry `dlstreamer-pipeline-server`
-  # above so the two pipeline sets (and their REST `/pipelines` listings)
-  # don't collide — it pulls its RTSP *source* from that UAV stream.
-  lvc-pipeline-server:
-    image: ${DLSTREAMER_PIPELINE_SERVER_IMAGE:-intel/dlstreamer-pipeline-server:2026.2.0-ubuntu24}
-    hostname: lvc-pipeline-server
-    container_name: lvc-pipeline-server
-    privileged: true
-    tty: true
-    entrypoint: [ "./run.sh" ]
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    environment:
-      - no_proxy=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,broker,dlstreamer-pipeline-server,${no_proxy}
-      - NO_PROXY=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,broker,dlstreamer-pipeline-server,${NO_PROXY:-}
-      - http_proxy=${http_proxy}
-      - HTTP_PROXY=${http_proxy}
-      - https_proxy=${https_proxy}
-      - HTTPS_PROXY=${https_proxy}
-      - RUN_MODE=EVA
-      - ENABLE_RTSP=false
-      - ENABLE_WEBRTC=true
-      - REST_SERVER_PORT=8080
-      - ADD_UTCTIME_TO_METADATA=true
-      - LSFEATURE_NAME="EVAM"
-      - HTTPS=false
-      - MTLS_VERIFICATION=false
-      - APPEND_PIPELINE_NAME_TO_PUBLISHER_TOPIC=false
-      - WEBRTC_SIGNALING_SERVER=http://mediamtx:8889
-      - MQTT_HOST=broker
-      - MQTT_PORT=1883
-      - GST_DEBUG=1
-    volumes:
-      - lvc-pipeline-server-root:/var/cache/pipeline_root:uid=1999,gid=1999
-      - "/run/udev:/run/udev:ro"
-      - "/tmp:/tmp"
-      - "./resources/ov_models:/home/pipeline-server/models"
-      - "./resources/ov_detection_models:/home/pipeline-server/detection_models"
-      - "./configs/config-lvc-captioning.json:/home/pipeline-server/config.json:ro"
-    group_add:
-      - "109"
-      - "110"
-      - "992"
-    device_cgroup_rules:
-      - "c 189:* rmw"
-      - "c 209:* rmw"
-      - "a 189:* rwm"
-    devices:
-      - ${GPU_DEVICE:-/dev/dri/card0}:${GPU_DEVICE:-/dev/dri/card0}
-      - ${GPU_RENDER_DEVICE:-/dev/dri/renderD128}:${GPU_RENDER_DEVICE:-/dev/dri/renderD128}
-      - ${NPU_DEVICE:-/dev/null}:${NPU_DEVICE:-/dev/null}
-    ports:
-      - "${HOST_IP:-127.0.0.1}:${EVAM_HOST_PORT:-8040}:8080"
-    networks:
-      - app_network
-    depends_on:
-      - mediamtx
-      - broker
-      - dlstreamer-pipeline-server
-
-  # LVC web dashboard + REST API, pulled from Docker Hub.
+  # LVC web dashboard + REST API, pulled from Docker Hub. Talks to the
+  # single combined dlstreamer-pipeline-server above for both the captioning
+  # pipeline REST API (port 8081) and as the RTSP source of its own
+  # annotated stream.
   video-caption-service:
     image: ${REGISTRY:-intel/}video-caption-service:${TAG:-latest}
     container_name: video-caption-service
     environment:
-      - no_proxy=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,broker,${no_proxy}
-      - NO_PROXY=localhost,127.0.0.1,mediamtx,coturn,lvc-pipeline-server,video-caption-service,broker,${NO_PROXY:-}
+      - no_proxy=localhost,127.0.0.1,mediamtx,coturn,dlstreamer-pipeline-server,video-caption-service,broker,${no_proxy}
+      - NO_PROXY=localhost,127.0.0.1,mediamtx,coturn,dlstreamer-pipeline-server,video-caption-service,broker,${NO_PROXY:-}
       - http_proxy=${http_proxy}
       - HTTP_PROXY=${http_proxy}
       - https_proxy=${https_proxy}
       - HTTPS_PROXY=${https_proxy}
       - DASHBOARD_PORT=4173
-      - PIPELINE_SERVER_URL=http://lvc-pipeline-server:8080
+      - PIPELINE_SERVER_URL=http://dlstreamer-pipeline-server:8081
       - MQTT_BROKER_HOST=broker
       - MQTT_BROKER_PORT=1883
       - MQTT_TOPIC_PREFIX=live-video-captioning
@@ -332,7 +298,7 @@ services:
       retries: 3
       start_period: 40s
     depends_on:
-      - lvc-pipeline-server
+      - dlstreamer-pipeline-server
       - mediamtx
       - broker
     networks:
@@ -344,11 +310,6 @@ networks:
 
 volumes:
   dlstreamer-pipeline-server-pipeline-root:
-    driver: local
-    driver_opts:
-      type: tmpfs
-      device: tmpfs
-  lvc-pipeline-server-root:
     driver: local
     driver_opts:
       type: tmpfs
