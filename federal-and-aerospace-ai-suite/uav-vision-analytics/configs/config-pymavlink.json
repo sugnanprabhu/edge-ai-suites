@@ -60,7 +60,7 @@
                 "name": "uav_object_detection_cpu_caption",
                 "source": "gstreamer",
                 "queue_maxsize": 50,
-                "pipeline": "multifilesrc location=/home/pipeline-server/resources/videos/uav_sample.avi loop=true ! h264parse ! decodebin3 ! tee name=split allow-not-linked=true split. ! queue ! gvadetect device=CPU name=detection model-instance-id=instcpu0cap model=/home/pipeline-server/resources/models/yolo11s/yolo11s_openvino_model/yolo11s.xml threshold=0.4 ! gvapython module=/home/pipeline-server/gvapython/telemetry-overlay-pymavlink.py class=DrawDynamicText function=process_frame arg=[\"PyMAVLink-RTSP-CPU-Caption\"] ! gvametaconvert add-empty-results=true name=metaconvert ! gvametapublish name=destination ! appsink name=appsink sync=false split. ! queue leaky=downstream max-size-buffers=2 ! videoconvert ! video/x-raw,format=BGRA ! videorate drop-only=true ! video/x-raw,format=BGRA,framerate={parameters[frame_rate]}/1 ! videoscale ! video/x-raw,format=BGRA,width=[1,{parameters[frame_width]}],height=[1,{parameters[frame_height]}] ! gvagenai name=captioner model-path=/home/pipeline-server/resources/ov_models/cpu/InternVL2-1B device=CPU prompt=\"Describe what you see in the scene.\" chunk-size=1 generation-config=\"max_new_tokens={parameters[captioner_max_new_tokens]},num_beams=1,do_sample=false,temperature=0.1,repetition_penalty=1.1\" frame-rate={parameters[frame_rate]} metrics=true ! gvametaconvert add-empty-results=true name=caption_metaconvert ! gvapython class=MQTTPublisher function=process module=/home/pipeline-server/gvapython/mqtt_publisher/mqtt_publisher.py name=mqtt_publisher kwarg={% raw %}{{\"topic\":\"uav/caption/cpu\"}}{% endraw %} ! fakesink sync=false async=false",
+                "pipeline": "multifilesrc location=/home/pipeline-server/resources/videos/uav_sample.avi loop=true ! h264parse ! decodebin3 ! tee name=split allow-not-linked=true split. ! queue ! gvadetect device=CPU name=detection model-instance-id=instcpu0cap model=/home/pipeline-server/resources/models/yolo11s/yolo11s_openvino_model/yolo11s.xml threshold=0.4 ! gvapython module=/home/pipeline-server/gvapython/telemetry-overlay-pymavlink.py class=DrawDynamicText function=process_frame arg=[\"PyMAVLink-RTSP-CPU-Caption\"] ! gvametaconvert add-empty-results=true name=metaconvert ! gvametapublish name=destination ! appsink name=appsink sync=false split. ! queue leaky=downstream max-size-buffers=2 ! videoconvert ! video/x-raw,format=BGRA ! videorate drop-only=true ! video/x-raw,format=BGRA,framerate={parameters[frame_rate]}/1 ! videoscale ! video/x-raw,format=BGRA,width=[1,{parameters[frame_width]}],height=[1,{parameters[frame_height]}] ! gvagenai name=captioner model-path={parameters[captioner_model_path]} device={parameters[captioner_device]} prompt=\"Describe what you see in the scene.\" chunk-size=1 generation-config=\"max_new_tokens={parameters[captioner_max_new_tokens]},num_beams=1,do_sample=false,temperature=0.1,repetition_penalty=1.1\" frame-rate={parameters[frame_rate]} metrics=true ! gvametaconvert add-empty-results=true name=caption_metaconvert ! gvapython class=MQTTPublisher function=process module=/home/pipeline-server/gvapython/mqtt_publisher/mqtt_publisher.py name=mqtt_publisher kwarg={% raw %}{{\"topic\":\"uav/caption/cpu\"}}{% endraw %} ! fakesink sync=false async=false",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -69,6 +69,15 @@
                             "minimum": 1,
                             "maximum": 4096,
                             "default": 50
+                        },
+                        "captioner_model_path": {
+                            "type": "string",
+                            "default": "/home/pipeline-server/resources/ov_models/cpu/InternVL2-1B"
+                        },
+                        "captioner_device": {
+                            "type": "string",
+                            "enum": ["CPU", "GPU"],
+                            "default": "CPU"
                         },
                         "frame_rate": {
                             "type": "integer",
@@ -93,7 +102,7 @@
                 "name": "uav_object_detection_gpu_caption",
                 "source": "gstreamer",
                 "queue_maxsize": 50,
-                "pipeline": "multifilesrc location=/home/pipeline-server/resources/videos/uav_sample.avi loop=true ! h264parse ! decodebin3 ! tee name=split allow-not-linked=true split. ! queue ! gvadetect device=GPU model-instance-id=instgpu0cap inference-region=full-frame inference-interval=1 batch-size=1 nireq=1 ie-config=\"GPU_THROUGHPUT_STREAMS=1\" threshold=0.4 name=detection model=/home/pipeline-server/resources/models/yolo11s/yolo11s_openvino_model/yolo11s.xml ! gvapython module=/home/pipeline-server/gvapython/telemetry-overlay-pymavlink.py class=DrawDynamicText function=process_frame arg=[\"PyMAVLink-RTSP-GPU-Caption\"] ! queue ! gvametaconvert add-empty-results=true name=metaconvert ! gvametapublish name=destination ! queue ! gvafpscounter ! appsink name=appsink sync=false split. ! queue leaky=downstream max-size-buffers=2 ! videoconvert ! video/x-raw,format=BGRA ! videorate drop-only=true ! video/x-raw,format=BGRA,framerate={parameters[frame_rate]}/1 ! videoscale ! video/x-raw,format=BGRA,width=[1,{parameters[frame_width]}],height=[1,{parameters[frame_height]}] ! gvagenai name=captioner model-path=/home/pipeline-server/resources/ov_models/gpu/InternVL2-1B device=GPU prompt=\"Describe what you see in the scene.\" chunk-size=1 generation-config=\"max_new_tokens={parameters[captioner_max_new_tokens]},num_beams=1,do_sample=false,temperature=0.1,repetition_penalty=1.1\" frame-rate={parameters[frame_rate]} metrics=true ! gvametaconvert add-empty-results=true name=caption_metaconvert ! gvapython class=MQTTPublisher function=process module=/home/pipeline-server/gvapython/mqtt_publisher/mqtt_publisher.py name=mqtt_publisher kwarg={% raw %}{{\"topic\":\"uav/caption/gpu\"}}{% endraw %} ! fakesink sync=false async=false",
+                "pipeline": "multifilesrc location=/home/pipeline-server/resources/videos/uav_sample.avi loop=true ! h264parse ! decodebin3 ! tee name=split allow-not-linked=true split. ! queue ! gvadetect device=GPU model-instance-id=instgpu0cap inference-region=full-frame inference-interval=1 batch-size=1 nireq=1 ie-config=\"GPU_THROUGHPUT_STREAMS=1\" threshold=0.4 name=detection model=/home/pipeline-server/resources/models/yolo11s/yolo11s_openvino_model/yolo11s.xml ! gvapython module=/home/pipeline-server/gvapython/telemetry-overlay-pymavlink.py class=DrawDynamicText function=process_frame arg=[\"PyMAVLink-RTSP-GPU-Caption\"] ! queue ! gvametaconvert add-empty-results=true name=metaconvert ! gvametapublish name=destination ! queue ! gvafpscounter ! appsink name=appsink sync=false split. ! queue leaky=downstream max-size-buffers=2 ! videoconvert ! video/x-raw,format=BGRA ! videorate drop-only=true ! video/x-raw,format=BGRA,framerate={parameters[frame_rate]}/1 ! videoscale ! video/x-raw,format=BGRA,width=[1,{parameters[frame_width]}],height=[1,{parameters[frame_height]}] ! gvagenai name=captioner model-path={parameters[captioner_model_path]} device={parameters[captioner_device]} prompt=\"Describe what you see in the scene.\" chunk-size=1 generation-config=\"max_new_tokens={parameters[captioner_max_new_tokens]},num_beams=1,do_sample=false,temperature=0.1,repetition_penalty=1.1\" frame-rate={parameters[frame_rate]} metrics=true ! gvametaconvert add-empty-results=true name=caption_metaconvert ! gvapython class=MQTTPublisher function=process module=/home/pipeline-server/gvapython/mqtt_publisher/mqtt_publisher.py name=mqtt_publisher kwarg={% raw %}{{\"topic\":\"uav/caption/gpu\"}}{% endraw %} ! fakesink sync=false async=false",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -102,6 +111,15 @@
                             "minimum": 1,
                             "maximum": 4096,
                             "default": 50
+                        },
+                        "captioner_model_path": {
+                            "type": "string",
+                            "default": "/home/pipeline-server/resources/ov_models/gpu/InternVL2-1B"
+                        },
+                        "captioner_device": {
+                            "type": "string",
+                            "enum": ["CPU", "GPU"],
+                            "default": "GPU"
                         },
                         "frame_rate": {
                             "type": "integer",
@@ -126,7 +144,7 @@
                 "name": "uav_object_detection_npu_caption",
                 "source": "gstreamer",
                 "queue_maxsize": 50,
-                "pipeline": "multifilesrc location=/home/pipeline-server/resources/videos/uav_sample.avi loop=true ! h264parse ! decodebin3 ! tee name=split allow-not-linked=true split. ! queue ! gvadetect device=NPU model-instance-id=instnpu0cap inference-region=full-frame inference-interval=1 batch-size=1 nireq=4 threshold=0.4 name=detection model=/home/pipeline-server/resources/models/yolo11s/yolo11s_openvino_model/yolo11s.xml ! gvapython module=/home/pipeline-server/gvapython/telemetry-overlay-pymavlink.py class=DrawDynamicText function=process_frame arg=[\"PyMAVLink-RTSP-NPU-Caption\"] ! queue ! gvametaconvert add-empty-results=true name=metaconvert ! gvametapublish name=destination ! queue ! gvafpscounter ! appsink name=appsink sync=false split. ! queue leaky=downstream max-size-buffers=2 ! videoconvert ! video/x-raw,format=BGRA ! videorate drop-only=true ! video/x-raw,format=BGRA,framerate={parameters[frame_rate]}/1 ! videoscale ! video/x-raw,format=BGRA,width=[1,{parameters[frame_width]}],height=[1,{parameters[frame_height]}] ! gvagenai name=captioner model-path=/home/pipeline-server/resources/ov_models/cpu/InternVL2-1B device=CPU prompt=\"Describe what you see in the scene.\" chunk-size=1 generation-config=\"max_new_tokens={parameters[captioner_max_new_tokens]},num_beams=1,do_sample=false,temperature=0.1,repetition_penalty=1.1\" frame-rate={parameters[frame_rate]} metrics=true ! gvametaconvert add-empty-results=true name=caption_metaconvert ! gvapython class=MQTTPublisher function=process module=/home/pipeline-server/gvapython/mqtt_publisher/mqtt_publisher.py name=mqtt_publisher kwarg={% raw %}{{\"topic\":\"uav/caption/npu\"}}{% endraw %} ! fakesink sync=false async=false",
+                "pipeline": "multifilesrc location=/home/pipeline-server/resources/videos/uav_sample.avi loop=true ! h264parse ! decodebin3 ! tee name=split allow-not-linked=true split. ! queue ! gvadetect device=NPU model-instance-id=instnpu0cap inference-region=full-frame inference-interval=1 batch-size=1 nireq=4 threshold=0.4 name=detection model=/home/pipeline-server/resources/models/yolo11s/yolo11s_openvino_model/yolo11s.xml ! gvapython module=/home/pipeline-server/gvapython/telemetry-overlay-pymavlink.py class=DrawDynamicText function=process_frame arg=[\"PyMAVLink-RTSP-NPU-Caption\"] ! queue ! gvametaconvert add-empty-results=true name=metaconvert ! gvametapublish name=destination ! queue ! gvafpscounter ! appsink name=appsink sync=false split. ! queue leaky=downstream max-size-buffers=2 ! videoconvert ! video/x-raw,format=BGRA ! videorate drop-only=true ! video/x-raw,format=BGRA,framerate={parameters[frame_rate]}/1 ! videoscale ! video/x-raw,format=BGRA,width=[1,{parameters[frame_width]}],height=[1,{parameters[frame_height]}] ! gvagenai name=captioner model-path={parameters[captioner_model_path]} device={parameters[captioner_device]} prompt=\"Describe what you see in the scene.\" chunk-size=1 generation-config=\"max_new_tokens={parameters[captioner_max_new_tokens]},num_beams=1,do_sample=false,temperature=0.1,repetition_penalty=1.1\" frame-rate={parameters[frame_rate]} metrics=true ! gvametaconvert add-empty-results=true name=caption_metaconvert ! gvapython class=MQTTPublisher function=process module=/home/pipeline-server/gvapython/mqtt_publisher/mqtt_publisher.py name=mqtt_publisher kwarg={% raw %}{{\"topic\":\"uav/caption/npu\"}}{% endraw %} ! fakesink sync=false async=false",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -135,6 +153,15 @@
                             "minimum": 1,
                             "maximum": 4096,
                             "default": 50
+                        },
+                        "captioner_model_path": {
+                            "type": "string",
+                            "default": "/home/pipeline-server/resources/ov_models/cpu/InternVL2-1B"
+                        },
+                        "captioner_device": {
+                            "type": "string",
+                            "enum": ["CPU", "GPU"],
+                            "default": "CPU"
                         },
                         "frame_rate": {
                             "type": "integer",

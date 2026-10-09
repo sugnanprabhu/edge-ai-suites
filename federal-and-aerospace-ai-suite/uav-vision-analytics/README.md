@@ -133,6 +133,27 @@ This switches to the `uav_object_detection_<device>_caption` pipeline variants, 
 (at minimum for `CPU`; see below). Default is `CAPTION=false` (original pipelines,
 no captioning, no extra CPU/VLM load).
 
+**Using a different VLM model:** the captioner's model path/device are REST
+`parameters`, not hardcoded, so you can point captioning at any OpenVINO IR model
+already present on disk (e.g. a different model fetched via
+`make vlm-model VLM_MODEL_ID=...`) by overriding `captioner_model_path` and
+`captioner_device` when starting the pipeline:
+
+```bash
+curl -sk -X POST "https://<HOST_IP>/pipelines/user_defined_pipelines/uav_object_detection_cpu_caption" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "destination": {"frame": {"type": "rtsp", "path": "uav-mavlink-cpu"}},
+        "parameters": {
+          "captioner_model_path": "/home/pipeline-server/resources/ov_models/<device>/<ModelName>",
+          "captioner_device": "GPU"
+        }
+      }'
+```
+
+Omit `parameters` to use the pipeline's default model/device (as documented above).
+`captioner_device` accepts `CPU` or `GPU`.
+
 ### Manually starting/stopping a pipeline (without arming the drone)
 
 `make start-rtsp` relies on MAVLink ARM/DISARM events to start/stop pipelines
