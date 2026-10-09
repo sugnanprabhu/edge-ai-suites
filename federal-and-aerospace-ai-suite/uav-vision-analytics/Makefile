@@ -13,9 +13,25 @@ MODEL_DIR      := resources/models/yolo11s
 MODEL_XML      := $(MODEL_DIR)/yolo11s_openvino_model/yolo11s.xml
 VENV           := resources/venv
 DEVICE         ?= gpu
+CAPTION        ?= false
 SSL_DIR        := configs/nginx/ssl
+VLM_MODEL_PATH := $(CURDIR)/resources
+VLM_MODEL_ID   ?= OpenGVLab/InternVL2-1B
+VLM_DEVICE     ?= CPU,GPU,NPU
+VLM_WEIGHT_FORMAT ?= int8
 
-.PHONY: help init build model _check_model _check_certs _check_venv_pkg \
+# Canonical download_models.sh lives in the LVC app (metro-ai-suite); fetched on
+# demand and cached locally rather than vendored, so there's a single source of
+# truth. Pinned to a commit for reproducibility — bump VLM_DOWNLOAD_SCRIPT_REF to
+# pick up upstream changes.
+VLM_DOWNLOAD_SCRIPT_REPO ?= open-edge-platform/edge-ai-suites
+VLM_DOWNLOAD_SCRIPT_REF  ?= 3e8fea635ef8e8484dbd18a35238caa90e65f111
+VLM_DOWNLOAD_SCRIPT_PATH := metro-ai-suite/live-video-analysis/live-video-captioning/model_download_scripts/download_models.sh
+VLM_DOWNLOAD_SCRIPT_URL  ?= https://raw.githubusercontent.com/$(VLM_DOWNLOAD_SCRIPT_REPO)/$(VLM_DOWNLOAD_SCRIPT_REF)/$(VLM_DOWNLOAD_SCRIPT_PATH)
+VLM_DOWNLOAD_SCRIPT      := $(CURDIR)/.cache/download_models.sh
+
+.PHONY: help init build model vlm-model _check_model _check_certs _check_venv_pkg \
+        _fetch_vlm_download_script \
         pymav-up pymav-down \
         uavsdk-up uavsdk-down \
         start-rtsp
@@ -145,6 +161,31 @@ model: _check_venv_pkg ## Download YOLO11s (COCO-pretrained) and export to OpenV
 	  half=True
 	@echo "[model] Done. Model at: $(MODEL_DIR)/yolo11s_openvino_model/"
 
+_fetch_vlm_download_script: ## (internal) Fetch+cache the canonical download_models.sh from the LVC app. Set FORCE_REFRESH=true to re-fetch.
+	@mkdir -p "$(dir $(VLM_DOWNLOAD_SCRIPT))"
+	@if [ "$(FORCE_REFRESH)" = "true" ] || [ ! -f "$(VLM_DOWNLOAD_SCRIPT)" ]; then \
+		echo "[vlm-model] Fetching download_models.sh from $(VLM_DOWNLOAD_SCRIPT_URL)"; \
+		curl -fsSL "$(VLM_DOWNLOAD_SCRIPT_URL)" -o "$(VLM_DOWNLOAD_SCRIPT)" || { \
+			echo "❌ Failed to fetch download_models.sh. Check network access to raw.githubusercontent.com,"; \
+			echo "   or verify VLM_DOWNLOAD_SCRIPT_REF=$(VLM_DOWNLOAD_SCRIPT_REF) still exists upstream."; \
+			rm -f "$(VLM_DOWNLOAD_SCRIPT)"; \
+			exit 1; \
+		}; \
+		chmod +x "$(VLM_DOWNLOAD_SCRIPT)"; \
+	else \
+		echo "[vlm-model] Using cached download_models.sh at $(VLM_DOWNLOAD_SCRIPT) (FORCE_REFRESH=true to re-fetch)"; \
+	fi
+
+vlm-model: _fetch_vlm_download_script ## Download/convert the VLM captioning model (OpenVINO IR) for CPU, GPU, and NPU. Override VLM_MODEL_ID/VLM_DEVICE/VLM_WEIGHT_FORMAT to customize.
+	@echo "[vlm-model] Downloading '$(VLM_MODEL_ID)' (weight-format=$(VLM_WEIGHT_FORMAT)) for device(s): $(VLM_DEVICE)"
+	@echo "[vlm-model] NOTE: NPU conversion always uses int4 regardless of VLM_WEIGHT_FORMAT (enforced by the script)."
+	MODEL_PATH="$(VLM_MODEL_PATH)" "$(VLM_DOWNLOAD_SCRIPT)" \
+	  --model "$(VLM_MODEL_ID)" \
+	  --type vlm \
+	  --weight-format "$(VLM_WEIGHT_FORMAT)" \
+	  --device "$(VLM_DEVICE)"
+	@echo "[vlm-model] Done. Model(s) at: resources/ov_models/<device>/$(notdir $(VLM_MODEL_ID))/"
+
 # ── pymavlink stack ───────────────────────────────────────────────────────────
 
 pymav-up: _check_model _check_certs ## Start standalone pymavlink stack (PX4 SITL + broker + DL Streamer Pipeline Server + mediamtx)
@@ -163,10 +204,16 @@ uavsdk-down: ## Stop and remove UAV Mission Compute SDK stack (includes volumes)
 
 # ── Pipeline management ───────────────────────────────────────────────────────
 
-start-rtsp: ## Start RTSP pipelines. DEVICE=cpu|gpu|npu|all (default: gpu)
+start-rtsp: ## Start RTSP pipelines. DEVICE=cpu|gpu|npu|all (default: gpu). CAPTION=true|false (default: false) to also run VLM scene captioning (requires 'make vlm-model').
+	@if [ "$(CAPTION)" = "true" ] && [ ! -f "resources/ov_models/cpu/InternVL2-1B/openvino_language_model.xml" ]; then \
+		echo "❌ VLM captioning model not found: resources/ov_models/cpu/InternVL2-1B/"; \
+		echo "   Run 'make vlm-model' first (CAPTION=true requires the CPU VLM model)."; \
+		exit 1; \
+	fi
 	-docker exec -it \
 	  -e HOST_IP=$(HOST_IP) \
 	  -e PIPELINE_DEVICE=$(DEVICE) \
+	  -e CAPTION=$(CAPTION) \
 	  $(DLSPS) bash -c \
 	  "python3 /home/pipeline-server/scripts/pipeline_manager.py --sink rtsp"
 

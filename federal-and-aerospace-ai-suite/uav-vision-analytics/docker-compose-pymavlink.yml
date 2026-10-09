@@ -135,11 +135,13 @@ services:
       - "${HOST_IP:-127.0.0.1}:80:80"
       - "${HOST_IP:-127.0.0.1}:443:443"
       - "${HOST_IP:-127.0.0.1}:8555:8555"
+      - "${HOST_IP:-127.0.0.1}:1883:1883"
     networks:
       - app_network
     depends_on:
       - dlstreamer-pipeline-server
       - metrics-manager
+      - broker
 
 networks:
   app_network:

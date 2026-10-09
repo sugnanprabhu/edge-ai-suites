@@ -30,6 +30,10 @@ MODEL_PATH          = (
 )
 # Passed via make start-rtsp DEVICE=cpu|gpu|npu|all; default is gpu.
 PIPELINE_DEVICE = os.getenv("PIPELINE_DEVICE", "gpu").lower()
+# Passed via make start-rtsp CAPTION=true|false; default is false. When true,
+# the RTSP sink uses the *_caption pipeline variants (detection+telemetry RTSP
+# branch, unchanged, plus an independent VLM captioning branch over MQTT).
+CAPTION_ENABLED = os.getenv("CAPTION", "false").strip().lower() in ("1", "true", "yes")
 
 # ── Pipeline definitions ──────────────────────────────────────────────────────
 
@@ -37,6 +41,17 @@ RTSP_PIPELINES = [
     {"name": "uav_object_detection_cpu", "frame_path": "uav-mavlink-cpu", "device": "CPU"},
     {"name": "uav_object_detection_gpu", "frame_path": "uav-mavlink-gpu", "device": "GPU"},
     {"name": "uav_object_detection_npu", "frame_path": "uav-mavlink-npu", "device": "NPU"},
+]
+
+# Caption variants: same RTSP/telemetry output as RTSP_PIPELINES — including
+# the exact same frame_path per device, so the RTSP URL a viewer connects to
+# never changes whether CAPTION is on or off — plus a second branch that runs
+# VLM scene captioning and publishes results over MQTT (topic:
+# uav/caption/<device>). Requires 'make vlm-model' first.
+RTSP_CAPTION_PIPELINES = [
+    {"name": "uav_object_detection_cpu_caption", "frame_path": "uav-mavlink-cpu", "device": "CPU"},
+    {"name": "uav_object_detection_gpu_caption", "frame_path": "uav-mavlink-gpu", "device": "GPU"},
+    {"name": "uav_object_detection_npu_caption", "frame_path": "uav-mavlink-npu", "device": "NPU"},
 ]
 
 UDP_PIPELINES = [
@@ -67,6 +82,24 @@ def _build_rtsp_payload(pipeline: dict) -> dict:
                 "model": MODEL_PATH,
                 "device": pipeline["device"],
             }
+        },
+    }
+
+
+def _build_rtsp_caption_payload(pipeline: dict) -> dict:
+    # NOTE: unlike _build_rtsp_payload(), this intentionally omits
+    # 'detection-properties' (gvadetect model/device are hardcoded inline in
+    # the *_caption pipeline strings) and 'destination.metadata' (would
+    # auto-attach a duplicate MQTT/file publisher onto every gvametaconvert
+    # element in the pipeline, including the caption branch's own explicit
+    # mqtt_publisher — both are known to deadlock the pipeline; see
+    # configs/config-pymavlink.json comments and docs/ for details).
+    return {
+        "destination": {
+            "frame": {
+                "type": "rtsp",
+                "path": pipeline["frame_path"],
+            },
         },
     }
 
@@ -170,12 +203,20 @@ def stop_pipelines() -> None:
 # ── Main monitor loop ─────────────────────────────────────────────────────────
 
 def monitor_and_control(sink: str) -> None:
-    pipelines     = RTSP_PIPELINES if sink == "rtsp" else UDP_PIPELINES
-    pipelines     = _filter_by_device(pipelines, PIPELINE_DEVICE)
-    build_payload = _build_rtsp_payload if sink == "rtsp" else _build_udp_payload
+    if sink == "rtsp" and CAPTION_ENABLED:
+        pipelines     = RTSP_CAPTION_PIPELINES
+        build_payload = _build_rtsp_caption_payload
+    elif sink == "rtsp":
+        pipelines     = RTSP_PIPELINES
+        build_payload = _build_rtsp_payload
+    else:
+        pipelines     = UDP_PIPELINES
+        build_payload = _build_udp_payload
+    pipelines = _filter_by_device(pipelines, PIPELINE_DEVICE)
 
     print(f"[config] Sink mode : {sink.upper()}")
     print(f"[config] Device    : {PIPELINE_DEVICE.upper()}")
+    print(f"[config] Captioning: {'ENABLED' if CAPTION_ENABLED else 'disabled'}")
     print(f"[config] Pipelines : {[p['name'] for p in pipelines]}")
     print(f"Connecting to {CONNECTION_STRING}...")
 
