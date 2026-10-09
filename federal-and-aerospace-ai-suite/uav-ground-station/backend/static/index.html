@@ -1,0 +1,72 @@
+<!--
+SPDX-FileCopyrightText: (C) 2026 Intel Corporation
+SPDX-License-Identifier: Apache-2.0
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UAV Ground Station</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>UAV Ground Station <span class="muted">/ Remote Viewer</span></h1>
+    <button id="toggle-arch" class="btn btn-ghost" type="button">Architecture</button>
+  </header>
+
+  <section id="connect-bar" class="panel connect-bar">
+    <label for="host-input">Host</label>
+    <input id="host-input" type="text" placeholder="127.0.0.1" autocomplete="off" />
+
+    <button id="connect-btn" class="btn btn-primary" type="button">Connect</button>
+    <button id="refresh-btn" class="btn btn-ghost" type="button" title="Re-check running pipelines now">Refresh</button>
+    <span id="conn-status" class="pill pill-off">disconnected</span>
+  </section>
+
+  <main class="layout">
+    <section id="cards-container" class="cards-container"></section>
+
+    <aside class="side-panels">
+      <section class="panel">
+        <h2>Utilization</h2>
+        <div id="metrics" class="metrics">
+          <div class="metric-row">
+            <span class="metric-label">CPU</span>
+            <div class="bar"><div class="bar-fill" id="bar-cpu"></div></div>
+            <span class="metric-value" id="val-cpu">—</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Memory</span>
+            <div class="bar"><div class="bar-fill" id="bar-mem"></div></div>
+            <span class="metric-value" id="val-mem">—</span>
+          </div>
+          <div id="gpu-rows"></div>
+          <div class="metric-row">
+            <span class="metric-label">NPU</span>
+            <div class="bar"><div class="bar-fill" id="bar-npu"></div></div>
+            <span class="metric-value" id="val-npu">—</span>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <section id="arch-panel" class="panel arch-panel hidden">
+    <h2>Architecture</h2>
+    <p class="muted">
+      This viewer runs on a separate machine from the UAV stack. It pulls the
+      RTSP (M-JPEG) stream and relays it to the browser as a plain HTTP
+      <code>multipart/x-mixed-replace</code> MJPEG stream (no WebRTC/ICE, no
+      extra ports — see <code>VIDEO_DELIVERY_COMPARISON.md</code>), reads
+      pipeline/model info from the DL Streamer Pipeline Server's REST API,
+      proxies CPU/GPU/NPU utilization from <code>metrics-manager</code>, and
+      bridges scene captions from MQTT — all via nginx on the remote host.
+    </p>
+    <img src="img/architecture.svg" alt="Architecture diagram" class="arch-diagram" />
+  </section>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+###############################################################################
+# SPDX-FileCopyrightText: (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+#
+# UAV ground-station viewer — run this on a machine SEPARATE from the one
+# running ../uav-vision-analytics (docker-compose-pymavlink.yml /
+# docker-compose-uavsdk.yml). Enter the UAV host's IP in the dashboard and
+# press Connect; nothing here talks to the UAV host until a user does that.
+# Intentionally minimal: a single container serves the dashboard and relays
+# RTSP video to the browser as MJPEG-over-HTTP (see
+# VIDEO_DELIVERY_COMPARISON.md for why this replaced an earlier
+# mediamtx/WebRTC relay).
+###############################################################################
+
+services:
+
+  viz-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: uav-ground-station-backend:local
+    container_name: viz-backend
+    environment:
+      - DEFAULT_REMOTE_HOST=${VIZ_DEFAULT_HOST:-127.0.0.1}
+      - REMOTE_HTTPS_PORT=${VIZ_REMOTE_HTTPS_PORT:-443}
+      - REMOTE_RTSP_PORT=${VIZ_REMOTE_RTSP_PORT:-8555}
+      - REMOTE_MQTT_PORT=${VIZ_REMOTE_MQTT_PORT:-1883}
+      - MJPEG_FRAMERATE=${VIZ_MJPEG_FRAMERATE:-10}
+      - MJPEG_QUALITY=${VIZ_MJPEG_QUALITY:-5}
+    ports:
+      - "${VIZ_HOST_IP:-127.0.0.1}:${VIZ_PORT:-8080}:8080"
+    restart: on-failure:5
