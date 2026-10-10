@@ -57,11 +57,14 @@ services:
     environment:
       - http_proxy=${http_proxy}
       - https_proxy=${https_proxy}
-      - no_proxy=${no_proxy},${HOST_IP},host.docker.internal
-      - NO_PROXY=${no_proxy},${HOST_IP},host.docker.internal
+      - no_proxy=${no_proxy},${HOST_IP},host.docker.internal,mediamtx,coturn
+      - NO_PROXY=${no_proxy},${HOST_IP},host.docker.internal,mediamtx,coturn
       - ENABLE_WEBRTC=true
       - ENABLE_RTSP=true
       - RTSP_PORT=8555
+      # WHIP (publish) endpoint the pipeline server posts its SDP offer to;
+      # mediamtx then serves viewers over WHEP at the same host:port/<peer-id>.
+      - WEBRTC_SIGNALING_SERVER=http://mediamtx:8889
       - APPEND_PIPELINE_NAME_TO_PUBLISHER_TOPIC=true
       - RUN_MODE=EVA
       - EMIT_SOURCE_AND_DESTINATION=true
@@ -107,6 +110,49 @@ services:
         max_attempts: 5
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      - mediamtx
+
+  # WebRTC signaling/media server for the pipeline server's WHIP publisher
+  # (ENABLE_WEBRTC=true above) and viewers' WHEP playback. Not exposed
+  # directly -- nginx proxies 8889 (signaling) and 8189/udp (media) below.
+  mediamtx:
+    image: bluenviron/mediamtx:1.15.6
+    container_name: mediamtx
+    environment:
+      - http_proxy=${http_proxy}
+      - https_proxy=${https_proxy}
+      - no_proxy=${no_proxy},${HOST_IP},mediamtx,coturn
+      - NO_PROXY=${no_proxy},${HOST_IP},mediamtx,coturn
+      - MTX_LOGLEVEL=info
+      - MTX_API=no
+      - MTX_RTSP=no
+      - MTX_RTMP=no
+      - MTX_SRT=no
+      - MTX_HLS=no
+      - MTX_WEBRTCTRACKGATHERTIMEOUT=30s
+      - MTX_WEBRTCADDRESS=:8889
+      # Advertise the host as a direct ICE candidate so LAN clients connect
+      # peer-to-peer; coturn below remains the NAT-traversal fallback.
+      - MTX_WEBRTCADDITIONALHOSTS=${HOST_IP:-127.0.0.1}
+      - MTX_WEBRTCICESERVERS2_0_URL=turn:${HOST_IP:-127.0.0.1}:3478
+      - MTX_WEBRTCICESERVERS2_0_USERNAME=${MTX_WEBRTCICESERVERS2_0_USERNAME:-localhost}
+      - MTX_WEBRTCICESERVERS2_0_PASSWORD=${MTX_WEBRTCICESERVERS2_0_PASSWORD:-localpass}
+    restart: unless-stopped
+    networks:
+      - app_network
+
+  coturn:
+    image: coturn/coturn:4.12
+    container_name: coturn
+    environment:
+      - http_proxy=${http_proxy}
+      - https_proxy=${https_proxy}
+      - no_proxy=${no_proxy},${HOST_IP},mediamtx,coturn
+      - NO_PROXY=${no_proxy},${HOST_IP},mediamtx,coturn
+    command: [ "-v" ]
+    networks:
+      - app_network
 
   metrics-manager:
     image: intel/metrics-manager:2026.2.0
@@ -136,12 +182,19 @@ services:
       - "${HOST_IP:-127.0.0.1}:443:443"
       - "${HOST_IP:-127.0.0.1}:8555:8555"
       - "${HOST_IP:-127.0.0.1}:1883:1883"
+      # WebRTC: mediamtx WHIP/WHEP signaling (HTTP) + media (UDP/ICE), and
+      # coturn STUN/TURN for NAT traversal.
+      - "${HOST_IP:-127.0.0.1}:8889:8889"
+      - "${HOST_IP:-127.0.0.1}:8189:8189/udp"
+      - "${HOST_IP:-127.0.0.1}:3478:3478/udp"
     networks:
       - app_network
     depends_on:
       - dlstreamer-pipeline-server
       - metrics-manager
       - broker
+      - mediamtx
+      - coturn
 
 networks:
   app_network:

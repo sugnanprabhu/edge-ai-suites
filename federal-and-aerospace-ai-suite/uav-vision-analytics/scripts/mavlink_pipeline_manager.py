@@ -94,12 +94,27 @@ def _build_rtsp_caption_payload(pipeline: dict) -> dict:
     # element in the pipeline, including the caption branch's own explicit
     # mqtt_publisher — both are known to deadlock the pipeline; see
     # configs/config-pymavlink.json comments and docs/ for details).
+    #
+    # 'destination.frame' is a list here (not a single dict) so the pipeline
+    # server attaches both an RTSP AppDestination and a WebRTC AppDestination
+    # to the same appsink -- i.e. one running pipeline serves both transports
+    # from the same encoded/overlaid frames, no extra GPU/CPU encode cost per
+    # viewer. 'overlay: false' avoids a second (redundant) gvawatermark pass:
+    # the telemetry/detection overlay is already drawn in-pipeline via
+    # gvapython before these frames reach the shared appsink.
     return {
         "destination": {
-            "frame": {
-                "type": "rtsp",
-                "path": pipeline["frame_path"],
-            },
+            "frame": [
+                {
+                    "type": "rtsp",
+                    "path": pipeline["frame_path"],
+                },
+                {
+                    "type": "webrtc",
+                    "peer-id": pipeline["frame_path"],
+                    "overlay": False,
+                },
+            ],
         },
     }
 
@@ -178,6 +193,9 @@ def _print_stream_urls(pipelines: list[dict], sink: str) -> None:
     if sink == "rtsp":
         urls = "\n".join(f"  rtsp://{host_ip}:8555/{p['frame_path']}" for p in active)
         print(f"RTSP streams available at:\n{urls}")
+        if CAPTION_ENABLED:
+            webrtc_urls = "\n".join(f"  http://{host_ip}:8889/{p['frame_path']}" for p in active)
+            print(f"WebRTC (WHEP) viewers available at:\n{webrtc_urls}")
     else:
         urls = "\n".join(f"  {p['device']}: udp://0.0.0.0:{p['port']}" for p in active)
         print(f"UDP streams available at:\n{urls}")
