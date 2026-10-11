@@ -87,12 +87,12 @@
                         "frame_width": {
                             "type": "integer",
                             "minimum": 0,
-                            "default": 1920
+                            "default": 896
                         },
                         "frame_height": {
                             "type": "integer",
                             "minimum": 0,
-                            "default": 1080
+                            "default": 448
                         }
                     }
                 },
@@ -102,7 +102,7 @@
                 "name": "uav_object_detection_gpu_caption",
                 "source": "gstreamer",
                 "queue_maxsize": 50,
-                "pipeline": "multifilesrc location=/home/pipeline-server/resources/videos/uav_sample.avi loop=true ! h264parse ! decodebin3 ! tee name=split allow-not-linked=true split. ! queue ! gvadetect device=GPU model-instance-id=instgpu0cap inference-region=full-frame inference-interval=1 batch-size=1 nireq=1 ie-config=\"GPU_THROUGHPUT_STREAMS=1\" threshold=0.4 name=detection model=/home/pipeline-server/resources/models/yolo11s/yolo11s_openvino_model/yolo11s.xml ! gvapython module=/home/pipeline-server/gvapython/telemetry-overlay-pymavlink.py class=DrawDynamicText function=process_frame arg=[\"PyMAVLink-RTSP-GPU-Caption\"] ! queue ! gvametaconvert add-empty-results=true name=metaconvert ! gvametapublish name=destination ! queue ! gvafpscounter ! appsink name=appsink sync=false split. ! queue leaky=downstream max-size-buffers=2 ! videoconvert ! video/x-raw,format=BGRA ! videorate drop-only=true ! video/x-raw,format=BGRA,framerate={parameters[frame_rate]}/1 ! videoscale ! video/x-raw,format=BGRA,width=[1,{parameters[frame_width]}],height=[1,{parameters[frame_height]}] ! gvagenai name=captioner model-path={parameters[captioner_model_path]} device={parameters[captioner_device]} prompt=\"Describe what you see in the scene.\" chunk-size=1 generation-config=\"max_new_tokens={parameters[captioner_max_new_tokens]},num_beams=1,do_sample=false,temperature=0.1,repetition_penalty=1.1\" frame-rate={parameters[frame_rate]} metrics=true ! gvametaconvert add-empty-results=true name=caption_metaconvert ! gvapython class=MQTTPublisher function=process module=/home/pipeline-server/gvapython/mqtt_publisher/mqtt_publisher.py name=mqtt_publisher kwarg={% raw %}{{\"topic\":\"uav/caption/gpu\"}}{% endraw %} ! fakesink sync=false async=false",
+                "pipeline": "multifilesrc location=/home/pipeline-server/resources/videos/uav_sample.avi loop=true ! h264parse ! decodebin3 ! tee name=split allow-not-linked=true split. ! queue ! gvadetect device=GPU model-instance-id=instgpu0cap inference-region=full-frame inference-interval=1 batch-size=1 nireq=1 ie-config=\"GPU_THROUGHPUT_STREAMS=1\" threshold=0.4 name=detection model=/home/pipeline-server/resources/models/yolo11s/yolo11s_openvino_model/yolo11s.xml ! gvapython module=/home/pipeline-server/gvapython/telemetry-overlay-pymavlink.py class=DrawDynamicText function=process_frame arg=[\"PyMAVLink-RTSP-GPU-Caption\"] ! queue ! gvametaconvert add-empty-results=true name=metaconvert ! gvametapublish name=destination ! queue ! gvafpscounter ! appsink name=appsink sync=false split. ! queue leaky=downstream max-size-buffers=2 ! videorate drop-only=true ! video/x-raw,framerate={parameters[frame_rate]}/1 ! vapostproc ! video/x-raw,format=BGRA,width=[1,{parameters[frame_width]}],height=[1,{parameters[frame_height]}] ! gvagenai name=captioner model-path={parameters[captioner_model_path]} device={parameters[captioner_device]} prompt=\"Describe what you see in the scene.\" chunk-size=1 generation-config=\"max_new_tokens={parameters[captioner_max_new_tokens]},num_beams=1,do_sample=false,temperature=0.1,repetition_penalty=1.1\" frame-rate={parameters[frame_rate]} metrics=true ! gvametaconvert add-empty-results=true name=caption_metaconvert ! gvapython class=MQTTPublisher function=process module=/home/pipeline-server/gvapython/mqtt_publisher/mqtt_publisher.py name=mqtt_publisher kwarg={% raw %}{{\"topic\":\"uav/caption/gpu\"}}{% endraw %} ! fakesink sync=false async=false",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -129,12 +129,12 @@
                         "frame_width": {
                             "type": "integer",
                             "minimum": 0,
-                            "default": 1920
+                            "default": 896
                         },
                         "frame_height": {
                             "type": "integer",
                             "minimum": 0,
-                            "default": 1080
+                            "default": 448
                         }
                     }
                 },
@@ -171,12 +171,12 @@
                         "frame_width": {
                             "type": "integer",
                             "minimum": 0,
-                            "default": 1920
+                            "default": 896
                         },
                         "frame_height": {
                             "type": "integer",
                             "minimum": 0,
-                            "default": 1080
+                            "default": 448
                         }
                     }
                 },
