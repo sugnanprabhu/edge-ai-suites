@@ -114,8 +114,13 @@ services:
       - mediamtx
 
   # WebRTC signaling/media server for the pipeline server's WHIP publisher
-  # (ENABLE_WEBRTC=true above) and viewers' WHEP playback. Not exposed
-  # directly -- nginx proxies 8889 (signaling) and 8189/udp (media) below.
+  # (ENABLE_WEBRTC=true above) and viewers' WHEP playback. HTTP signaling
+  # stays internal -- nginx reverse-proxies WHEP under its HTTPS /webrtc/
+  # location (bundled into port 443). The UDP/ICE media port (8189) is
+  # published directly below instead of proxied by nginx: nginx's generic
+  # stream{} UDP relay re-sources packets under its own container IP and
+  # silently closes long-lived WebRTC media sessions after a few seconds,
+  # whereas a direct Docker port publish is a proper kernel-level DNAT.
   mediamtx:
     image: bluenviron/mediamtx:1.15.6
     container_name: mediamtx
@@ -135,9 +140,19 @@ services:
       # Advertise the host as a direct ICE candidate so LAN clients connect
       # peer-to-peer; coturn below remains the NAT-traversal fallback.
       - MTX_WEBRTCADDITIONALHOSTS=${HOST_IP:-127.0.0.1}
+      # ICE-TCP candidate (in addition to the default UDP mux on the same
+      # port number): many VPN/corporate-firewall paths that block or
+      # throttle arbitrary UDP still allow outbound TCP, so this gives
+      # remote viewers another, more NAT-friendly candidate pair to try
+      # alongside the UDP host candidate and the TURN relay. Matches the
+      # working reference in metro-vision-ai-app-recipe.
+      - MTX_WEBRTCLOCALTCPADDRESS=:8189
       - MTX_WEBRTCICESERVERS2_0_URL=turn:${HOST_IP:-127.0.0.1}:3478
       - MTX_WEBRTCICESERVERS2_0_USERNAME=${MTX_WEBRTCICESERVERS2_0_USERNAME:-localhost}
       - MTX_WEBRTCICESERVERS2_0_PASSWORD=${MTX_WEBRTCICESERVERS2_0_PASSWORD:-localpass}
+    ports:
+      - "${HOST_IP:-127.0.0.1}:8189:8189/udp"
+      - "${HOST_IP:-127.0.0.1}:8189:8189/tcp"
     restart: unless-stopped
     networks:
       - app_network
@@ -150,9 +165,39 @@ services:
       - https_proxy=${https_proxy}
       - no_proxy=${no_proxy},${HOST_IP},mediamtx,coturn
       - NO_PROXY=${no_proxy},${HOST_IP},mediamtx,coturn
-    command: [ "-v" ]
-    networks:
-      - app_network
+    # Long-term-credential TURN relay, matching mediamtx's
+    # MTX_WEBRTCICESERVERS2_0_USERNAME/PASSWORD above. Without matching
+    # credentials here, coturn challenges every allocation with 401 and the
+    # browser's TURN fallback never completes -- so viewers on a different
+    # network/NAT than this host (VPN, remote LAN, etc.) can signal fine but
+    # never actually receive media once direct UDP host-candidates are
+    # blocked by their own firewall/NAT.
+    #
+    # network_mode: host (instead of the bridged app_network + a single
+    # published 3478/udp port) is required for the TURN *relay* itself to
+    # work from outside this host's LAN/NAT: once a client allocates a
+    # relay, coturn by default hands out a port from a large ephemeral range
+    # (--min-port/--max-port, 49152-65535 unless narrowed) for the actual
+    # media flow -- Docker's bridge-network port mapping only forwards the
+    # single 3478 control port, so none of those relay ports would be
+    # reachable and ICE would keep timing out even though the TURN
+    # ALLOCATE/REFRESH handshake itself succeeds. Host networking lets the
+    # whole relay range bind directly to the host's real interface, which is
+    # the standard fix for coturn-in-Docker. HOST_IP (not the "coturn"
+    # hostname) is what mediamtx/clients already address it by, so this is
+    # a safe, self-contained change.
+    network_mode: host
+    command: [
+      "-v",
+      "--listening-port=3478",
+      "--realm=mediamtx",
+      "--lt-cred-mech",
+      "--user=${MTX_WEBRTCICESERVERS2_0_USERNAME:-localhost}:${MTX_WEBRTCICESERVERS2_0_PASSWORD:-localpass}",
+      "--external-ip=${HOST_IP:-127.0.0.1}",
+      "--no-cli",
+      "--no-tls",
+      "--no-dtls",
+    ]
 
   metrics-manager:
     image: intel/metrics-manager:2026.2.0
@@ -182,11 +227,12 @@ services:
       - "${HOST_IP:-127.0.0.1}:443:443"
       - "${HOST_IP:-127.0.0.1}:8555:8555"
       - "${HOST_IP:-127.0.0.1}:1883:1883"
-      # WebRTC: mediamtx WHIP/WHEP signaling (HTTP) + media (UDP/ICE), and
-      # coturn STUN/TURN for NAT traversal.
-      - "${HOST_IP:-127.0.0.1}:8889:8889"
-      - "${HOST_IP:-127.0.0.1}:8189:8189/udp"
-      - "${HOST_IP:-127.0.0.1}:3478:3478/udp"
+      # WebRTC: WHEP signaling is proxied under 443 (see nginx's /webrtc/
+      # location). mediamtx's UDP/ICE media port (8189) is published
+      # directly by the mediamtx service instead of passed through here --
+      # see the mediamtx service comment for why. coturn's STUN/TURN port
+      # (3478/udp) is bound directly by coturn itself via network_mode:
+      # host, not nginx.
     networks:
       - app_network
     depends_on:
