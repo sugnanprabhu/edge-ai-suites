@@ -20,13 +20,6 @@ SPDX-License-Identifier: Apache-2.0
     <label for="host-input">Companion Compute IP</label>
     <input id="host-input" type="text" placeholder="127.0.0.1" autocomplete="off" />
 
-    <label for="stream-mode-select" title="'WebRTC - Direct' iframes the remote UAV host's own native WHEP viewer page directly (no local relay) -- only available while a *_caption pipeline variant (with a native WebRTC destination) is running. 'WebRTC - Relay' is a legacy opt-in fallback: a local ffmpeg+mediamtx sidecar transcodes the remote RTSP source into WebRTC; it requires starting this stack with the extra docker-compose-mediamtx.yml overlay (see README.md).">Stream mode</label>
-    <select id="stream-mode-select">
-      <option value="webrtc-direct" selected>WebRTC - Direct (native, low latency)</option>
-      <option value="mjpeg">MJPEG (fallback)</option>
-      <option value="webrtc-relay">WebRTC - Relay (legacy, opt-in overlay)</option>
-    </select>
-
     <button id="connect-btn" class="btn btn-primary" type="button">Connect</button>
     <button id="refresh-btn" class="btn btn-ghost" type="button" title="Re-check running pipelines now">Refresh</button>
     <span id="conn-status" class="pill pill-off">disconnected</span>
@@ -54,19 +47,17 @@ SPDX-License-Identifier: Apache-2.0
   <section id="arch-panel" class="panel arch-panel hidden">
     <h2>Architecture</h2>
     <p class="muted">
-      This viewer runs on a separate machine from the UAV stack. By default it
-      pulls the RTSP stream and relays it to the browser as a plain HTTP
-      <code>multipart/x-mixed-replace</code> MJPEG stream (no WebRTC/ICE, no
-      extra ports — see <code>VIDEO_DELIVERY_COMPARISON.md</code>). The
-      optional "WebRTC" stream mode instead spawns a local ffmpeg relay that
-      pulls the same remote RTSP source, transcodes it to H.264 (WebRTC has
-      no MJPEG codec support), and publishes it into a local
-      <code>mediamtx</code> sidecar, which the browser then plays back over
-      WebRTC/WHEP for lower latency — this works regardless of the remote
-      pipeline's own RTSP encoding. Either way, it reads pipeline/model info
-      from the DL Streamer Pipeline Server's REST API, proxies CPU/GPU/NPU
-      utilization from <code>metrics-manager</code>, and bridges scene
-      captions from MQTT — all via nginx on the remote host.
+      This viewer runs on a separate machine from the UAV stack. It iframes
+      the remote UAV host's own native WHEP viewer page
+      (<code>https://&lt;host&gt;/webrtc/&lt;path&gt;/</code>) directly for
+      live video — no local relay, no transcoding, no extra backend code
+      (only available while a <code>*_caption</code> pipeline variant, the
+      only ones that attach a native WebRTC destination, is running; see
+      <code>LEGACY_STREAM_MODES.md</code> for the MJPEG/WebRTC-Relay
+      fallbacks this project used to have instead). It also reads
+      pipeline/model info from the DL Streamer Pipeline Server's REST API,
+      proxies CPU/GPU/NPU utilization from <code>metrics-manager</code>, and
+      bridges scene captions from MQTT — all via nginx on the remote host.
     </p>
     <img src="img/architecture.svg" alt="Architecture diagram" class="arch-diagram" />
   </section>

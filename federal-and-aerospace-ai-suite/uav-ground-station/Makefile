@@ -1,15 +1,12 @@
 # SPDX-FileCopyrightText: (C) 2026 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-.PHONY: help init up up-relay down logs
+.PHONY: help init up down logs
 
 ifneq (,$(wildcard .env))
   include .env
   export
 endif
-
-COMPOSE := docker-compose.yml
-COMPOSE_RELAY := docker-compose.yml -f docker-compose-mediamtx.yml
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / \
@@ -17,16 +14,13 @@ help: ## Show available targets
 
 init: ## Create .env from template if missing
 	@test -f .env || cp .env.example .env
-	@echo "[init] .env ready. Edit VIZ_DEFAULT_HOST to point at your UAV stack's host IP."
+	@echo "[init] .env ready. Edit VIZ_COMPANION_HOST to point at your UAV companion-compute board's IP."
 
-up: init ## Build and start the ground-station viewer (WebRTC - Direct + MJPEG only)
-	docker compose -f $(COMPOSE) up -d --build
+up: init ## Build and start the ground-station viewer (WebRTC - Direct)
+	docker compose up -d --build
 
-up-relay: init ## Same as 'up', plus the legacy WebRTC - Relay fallback (mediamtx+ffmpeg sidecar)
-	docker compose -f $(COMPOSE_RELAY) up -d --build
-
-down: ## Stop and remove the ground-station viewer (includes volumes, both profiles)
-	docker compose -f $(COMPOSE_RELAY) down -v
+down: ## Stop and remove the ground-station viewer
+	docker compose down -v
 
 logs: ## Tail logs from all running containers
-	docker compose -f $(COMPOSE_RELAY) logs -f
+	docker compose logs -f
