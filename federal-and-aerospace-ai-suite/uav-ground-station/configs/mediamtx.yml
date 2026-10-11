@@ -1,0 +1,68 @@
+# SPDX-FileCopyrightText: (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+#
+# Minimal mediamtx config for the uav-ground-station's opt-in WebRTC stream
+# mode. mediamtx itself never transcodes -- it only relays whatever codec it
+# is given, and WebRTC has no MJPEG codec support. So the actual video
+# pipeline is: remote RTSP (MJPEG or H.264) -> viz-backend's per-(host,
+# device) ffmpeg relay (transcodes to H.264) -> RTSP *push* into this
+# container -> WebRTC/WHEP out to the browser. See backend/main.py's
+# _WebrtcRelay / _ensure_webrtc_relay / /api/stream/webrtc-path.
+#
+# Paths are intentionally not pre-declared here -- "all_others" (below)
+# accepts a push-publish for any path name viz-backend's ffmpeg relay picks
+# (one per host+device, sanitized at runtime), since the remote host is only
+# known once a user enters it in the dashboard.
+
+logLevel: info
+
+# The control API, RTSP ingest, and WebRTC "read" endpoint are only ever
+# reached from inside the docker-compose network (viz-backend) or from the
+# host this stack is deployed on (browser -> published 8889 port) -- never
+# exposed to the public internet -- so default internal auth (which
+# otherwise requires a username/password for every non-localhost caller,
+# see mediamtx's own default mediamtx.yml) is relaxed to allow any caller on
+# any IP to use the api/read/publish actions.
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: api
+      - action: read
+      - action: publish
+      - action: playback
+
+# Control API -- viz-backend's reaper loop calls this (over the internal
+# docker network, not published to the host) to check reader counts.
+api: yes
+apiAddress: :9997
+
+# RTSP ingest -- NOT published to the host (see docker-compose.yml); only
+# viz-backend's ffmpeg relay (on the same docker network, as "mediamtx:8554")
+# ever publishes to it.
+rtsp: yes
+rtspAddress: :8554
+rtspTransports: [tcp]
+
+# WebRTC/WHEP server -- published to the host so the browser can view it.
+webrtc: yes
+webrtcAddress: :8889
+# UDP/ICE listener -- published to the host (see docker-compose.yml) so
+# browsers outside the docker network can actually exchange media.
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: ""
+
+# Not used by this dashboard -- disabled to shrink the protocol/port
+# footprint (these listeners still bind internally to the container but are
+# never published to the host).
+rtmp: no
+hls: no
+srt: no
+
+paths:
+  # Applies to any path name not explicitly listed (i.e. every relay path
+  # viz-backend's ffmpeg creates): no "source" configured means the path
+  # expects a publisher (viz-backend's ffmpeg relay) rather than mediamtx
+  # pulling from somewhere itself.
+  all_others:

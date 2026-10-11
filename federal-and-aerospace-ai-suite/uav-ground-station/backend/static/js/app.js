@@ -3,6 +3,7 @@
 
 (() => {
   const hostInput = document.getElementById("host-input");
+  const streamModeSelect = document.getElementById("stream-mode-select");
   const connectBtn = document.getElementById("connect-btn");
   const refreshBtn = document.getElementById("refresh-btn");
   const connStatus = document.getElementById("conn-status");
@@ -14,8 +15,10 @@
   let pipelinePollTimer = null;
   let currentHost = null;
   let isConnected = false; // true once at least one device card is live
+  let webrtcPort = 8889; // overwritten by /api/runtime-config
+  let remoteHttpsPort = 443; // overwritten by /api/runtime-config
 
-  // device -> { wrap, video, chipTtft, chipTpot, chipThroughput, chipLag,
+  // device -> { wrap, videoContainer, video, chipTtft, chipTpot, chipThroughput, chipLag,
   //             captionStatus, captionTimeline, captionHistory,
   //             lastCaptionReceivedAt, captionsSource, titleEl, metaEl }
   const cards = new Map();
@@ -150,6 +153,8 @@
       const cfg = await res.json();
       hostInput.value = cfg.defaultHost || "127.0.0.1";
       hostInput.placeholder = cfg.defaultHost || "127.0.0.1";
+      if (cfg.webrtcPort) webrtcPort = cfg.webrtcPort;
+      if (cfg.remoteHttpsPort) remoteHttpsPort = cfg.remoteHttpsPort;
       return cfg;
     } catch (err) {
       hostInput.value = "127.0.0.1";
@@ -173,9 +178,15 @@
     header.appendChild(title);
     header.appendChild(meta);
 
+    // Holds either an <img> (MJPEG-over-HTTP) or an <iframe> (mediamtx's
+    // built-in WHEP player) -- only one is ever attached at a time,
+    // swapped by startMjpegStream()/startWebrtcStream() below.
+    const videoContainer = document.createElement("div");
+    videoContainer.className = "device-video-container";
     const video = document.createElement("img");
     video.className = "device-video";
     video.alt = `Live video preview (${device.toUpperCase()})`;
+    videoContainer.appendChild(video);
 
     const captionPanel = document.createElement("div");
     captionPanel.className = "caption-panel";
@@ -216,7 +227,7 @@
     captionPanel.appendChild(captionTimeline);
 
     wrap.appendChild(header);
-    wrap.appendChild(video);
+    wrap.appendChild(videoContainer);
     wrap.appendChild(captionPanel);
 
     const card = {
@@ -224,6 +235,7 @@
       wrap,
       titleEl: title,
       metaEl: meta,
+      videoContainer,
       video,
       captionStatus,
       captionTimeline,
@@ -247,6 +259,8 @@
 
   // --- Video (MJPEG-over-HTTP, multipart/x-mixed-replace) ------------------
   function startMjpegStream(host, card) {
+    card.videoContainer.innerHTML = "";
+    card.videoContainer.appendChild(card.video);
     card.video.src = "";
     card.video.onload = () => setStatus("connected");
     card.video.onerror = () => {
@@ -254,6 +268,62 @@
     };
     const url = `/api/stream/mjpeg?host=${encodeURIComponent(host)}&device=${card.device}&_=${Date.now()}`;
     card.video.src = url;
+  }
+
+  // --- Video (WebRTC - Direct: remote host's own native WHEP viewer) -------
+  // Default, lowest-latency mode. The remote UAV stack already serves a
+  // complete, working WHEP viewer page at https://<host>/webrtc/<path>/
+  // (see uav-vision-analytics's nginx/mediamtx/coturn setup) -- no local
+  // relay, no transcoding, no extra backend code: just iframe it directly.
+  // Only available while a *_caption pipeline variant (the only ones that
+  // attach a native WebRTC destination) is running -- see
+  // /api/pipeline-info's "webrtc_native".
+  function startWebrtcDirectStream(host, card) {
+    card.videoContainer.innerHTML = "";
+    const iframe = document.createElement("iframe");
+    iframe.className = "device-video device-video-webrtc";
+    iframe.allow = "autoplay";
+    iframe.src = `https://${host}:${remoteHttpsPort}/webrtc/${card.rtspPath}/`;
+    card.videoContainer.appendChild(iframe);
+    setStatus("connected");
+  }
+
+  // --- Video (WebRTC - Relay via the local mediamtx sidecar) ----------------
+  // Legacy, opt-in fallback (requires the docker-compose-mediamtx.yml
+  // overlay) for when the remote pipeline has no native WebRTC destination
+  // (e.g. a base, non-caption pipeline). viz-backend transparently
+  // transcodes MJPEG (or passes through H.264) into a local mediamtx path
+  // via a per-(host,device) ffmpeg relay (see /api/stream/webrtc-path and
+  // _webrtc_relays in backend/main.py) -- WebRTC itself still has no MJPEG
+  // codec support, but the relay's ffmpeg always publishes H.264 to
+  // mediamtx regardless of the source codec.
+  async function startWebrtcRelayStream(host, card) {
+    card.videoContainer.innerHTML = "";
+    const placeholder = document.createElement("div");
+    placeholder.className = "device-video-placeholder";
+    placeholder.textContent = "Connecting (WebRTC - Relay)…";
+    card.videoContainer.appendChild(placeholder);
+    try {
+      const res = await fetch(
+        `/api/stream/webrtc-path?host=${encodeURIComponent(host)}&device=${card.device}`
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        placeholder.textContent = `WebRTC - Relay setup failed: ${body.detail || res.status} ` +
+          "(requires starting this stack with the docker-compose-mediamtx.yml overlay)";
+        return;
+      }
+      const { path } = await res.json();
+      const iframe = document.createElement("iframe");
+      iframe.className = "device-video device-video-webrtc";
+      iframe.allow = "autoplay";
+      iframe.src = `http://${window.location.hostname}:${webrtcPort}/${path}/`;
+      card.videoContainer.innerHTML = "";
+      card.videoContainer.appendChild(iframe);
+      setStatus("connected");
+    } catch (err) {
+      placeholder.textContent = `WebRTC - Relay setup failed: ${err}`;
+    }
   }
 
   // --- Pipeline/model info (shown compactly in the card header) ------------
@@ -266,15 +336,51 @@
       if (info.pipeline_name) parts.push(info.pipeline_name);
       parts.push(info.captioning ? "captioning on" : "captioning off");
       if (info.frame_rate !== null && info.frame_rate !== undefined) parts.push(`${info.frame_rate} fps`);
+      parts.push((info.encoding || "mjpeg").toUpperCase());
+      if (!info.webrtc_native) parts.push("no native WebRTC");
       card.metaEl.textContent = parts.join(" • ");
+      card.rtspPath = info.rtsp_path || `uav-mavlink-${card.device}`;
+      syncVideoMode(host, card, Boolean(info.webrtc_native));
     } catch (err) {
       card.metaEl.textContent = "error";
     }
   }
 
+  // Starts/swaps the card's video element to match the currently-selected
+  // stream mode, without restarting anything that's already active and
+  // still correct (avoids tearing down a working ffmpeg/WebRTC session on
+  // every 5s pipeline-info poll). "webrtc-direct" falls back to MJPEG
+  // whenever the running remote instance has no native WebRTC destination
+  // (webrtcNative=false, e.g. a base/non-caption pipeline); it switches back
+  // to WebRTC - Direct automatically once/if that changes (e.g. the device
+  // is restarted with --caption).
+  function syncVideoMode(host, card, webrtcNative) {
+    let desiredMode = streamModeSelect.value;
+    if (desiredMode === "webrtc-direct" && !webrtcNative) {
+      desiredMode = "mjpeg";
+    }
+    if (card.activeVideoMode === desiredMode) return;
+    card.activeVideoMode = desiredMode;
+
+    if (desiredMode === "webrtc-direct") {
+      startWebrtcDirectStream(host, card);
+    } else if (desiredMode === "webrtc-relay") {
+      startWebrtcRelayStream(host, card);
+    } else {
+      startMjpegStream(host, card);
+    }
+  }
+
   // --- Metrics (CPU/GPU/NPU via metrics-manager SSE proxy, host-level) -----
+  ChartManager.createConsolidatedChart('statsChart', [
+    { key: 'cpu', label: 'CPU %', color: '#1ad0ff' },
+    { key: 'mem', label: 'RAM %', color: '#8ca0c2' },
+    { key: 'npu', label: 'NPU %', color: '#b388ff' },
+  ]);
+
   function startMetricsStream(host) {
     if (metricsSource) metricsSource.close();
+    ChartManager.resetChart();
     metricsSource = new EventSource(`/api/metrics-stream?host=${encodeURIComponent(host)}`);
     metricsSource.onmessage = (evt) => {
       let payload;
@@ -287,42 +393,61 @@
     };
   }
 
-  function setBar(prefix, value) {
-    const bar = document.getElementById(`bar-${prefix}`);
-    const val = document.getElementById(`val-${prefix}`);
-    if (!bar || !val || value === undefined || value === null || Number.isNaN(value)) return;
-    const pct = Math.max(0, Math.min(100, value));
-    bar.style.width = `${pct}%`;
-    val.textContent = `${pct.toFixed(0)}%`;
-  }
-
-  const gpuRowsSeen = new Set();
-
-  function ensureGpuRow(gpuId) {
-    if (gpuRowsSeen.has(gpuId)) return;
-    gpuRowsSeen.add(gpuId);
-    const container = document.getElementById("gpu-rows");
-    const row = document.createElement("div");
-    row.className = "metric-row";
-    row.innerHTML = `
-      <span class="metric-label">GPU ${gpuId}</span>
-      <div class="bar"><div class="bar-fill" id="bar-gpu-${gpuId}"></div></div>
-      <span class="metric-value" id="val-gpu-${gpuId}">—</span>`;
-    container.appendChild(row);
+  function setHeaderValue(id, value) {
+    const el = document.getElementById(id);
+    if (!el || value === undefined || value === null || Number.isNaN(value)) return;
+    el.textContent = `${Math.max(0, Math.min(100, value)).toFixed(0)}%`;
   }
 
   function applyMetrics(metrics) {
+    const frameSamples = {};
+    const gpuUsageByDevice = new Map();
+
     for (const m of metrics) {
-      if (m.name === "cpu_usage_user") setBar("cpu", m.value);
-      if (m.name === "mem_used_percent") setBar("mem", m.value);
-      if (m.name === "npu_utilization") setBar("npu", m.value);
+      if (m.name === "cpu_usage_user") {
+        frameSamples.cpu = m.value;
+        setHeaderValue("cpuVal", m.value);
+      }
+      if (m.name === "mem_used_percent") {
+        frameSamples.mem = m.value;
+        setHeaderValue("ramVal", m.value);
+      }
+      if (m.name === "npu_utilization") {
+        frameSamples.npu = m.value;
+        setHeaderValue("npuVal", m.value);
+        const npuStat = document.getElementById("npuStat");
+        if (npuStat) npuStat.style.display = "";
+      }
       if (m.name === "gpu_engine_usage_usage") {
-        const gpuId = (m.labels && m.labels.gpu_id) || "0";
-        ensureGpuRow(gpuId);
-        setBar(`gpu-${gpuId}`, m.value);
+        const gpuId = String((m.labels && m.labels.gpu_id) || "0");
+        gpuUsageByDevice.set(gpuId, Math.max(gpuUsageByDevice.get(gpuId) || 0, m.value));
       }
     }
+
+    if (gpuUsageByDevice.size > 0) {
+      const gpuValues = document.getElementById("gpuValues");
+      if (gpuValues) gpuValues.innerHTML = "";
+      Array.from(gpuUsageByDevice.entries())
+        .sort(([a], [b]) => (Number(a) || 0) - (Number(b) || 0))
+        .forEach(([gpuId, usage]) => {
+          const key = `gpu:${gpuId}`;
+          frameSamples[key] = usage;
+          if (gpuValues) {
+            const chip = document.createElement("span");
+            chip.className = "gpu-value-chip";
+            chip.style.color = ChartManager.getSeriesColor(key);
+            chip.textContent = `GPU-${gpuId} ${usage.toFixed(0)}%`;
+            gpuValues.appendChild(chip);
+          }
+        });
+      if (gpuValues) gpuValues.style.display = "";
+    }
+
+    if (Object.keys(frameSamples).length > 0) {
+      ChartManager.pushStatFrame(frameSamples);
+    }
   }
+
 
   // --- Captions (MQTT bridged via SSE) --------------------------------------
   // Payload shape (from the gvagenai -> MQTTPublisher gvapython stage):
@@ -377,7 +502,11 @@
   }
 
   function connectCard(host, card) {
-    startMjpegStream(host, card);
+    // Video is started by refreshPipelineInfo()'s syncVideoMode() once we
+    // know the pipeline's actual encoding (needed to pick MJPEG vs WebRTC
+    // correctly); card.activeVideoMode starts unset so that first call
+    // always (re)starts it.
+    card.activeVideoMode = null;
     startCaptionsStream(host, card);
     refreshPipelineInfo(host, card);
   }
@@ -463,6 +592,17 @@
   refreshBtn.addEventListener("click", () => {
     if (!isConnected || !currentHost) return;
     pollAndReconcile(currentHost);
+  });
+
+  // Re-sync every live card's video element when the user switches stream
+  // mode mid-session (e.g. MJPEG -> WebRTC) instead of requiring a full
+  // reconnect.
+  streamModeSelect.addEventListener("change", () => {
+    if (!isConnected || !currentHost) return;
+    for (const card of cards.values()) {
+      card.activeVideoMode = null;
+      refreshPipelineInfo(currentHost, card);
+    }
   });
 
   loadRuntimeConfig();

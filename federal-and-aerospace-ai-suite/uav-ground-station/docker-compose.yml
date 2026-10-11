@@ -6,10 +6,23 @@
 # running ../uav-vision-analytics (docker-compose-pymavlink.yml /
 # docker-compose-uavsdk.yml). Enter the UAV host's IP in the dashboard and
 # press Connect; nothing here talks to the UAV host until a user does that.
-# Intentionally minimal: a single container serves the dashboard and relays
-# RTSP video to the browser as MJPEG-over-HTTP (see
-# VIDEO_DELIVERY_COMPARISON.md for why this replaced an earlier
-# mediamtx/WebRTC relay).
+#
+# Default stream modes (both need nothing beyond this file):
+#   - "WebRTC - Direct": the dashboard iframes the remote UAV host's own
+#     native WHEP viewer page (https://<host>/webrtc/<path>/) directly --
+#     no local relay, no transcoding. Only available while a *_caption
+#     pipeline variant is running on the remote host (the only ones that
+#     attach a native WebRTC destination there).
+#   - "MJPEG": the default fallback, used whenever WebRTC - Direct isn't
+#     available (see VIDEO_DELIVERY_COMPARISON.md for background).
+#
+# A third, legacy "WebRTC - Relay" mode (viz-backend transcodes the remote
+# RTSP source via a per-(host,device) ffmpeg relay, pushed into a local
+# mediamtx sidecar which serves it to the browser over WebRTC/WHEP) is
+# opt-in only -- bring up this stack WITH docker-compose-mediamtx.yml as an
+# extra -f overlay to enable it (useful when the remote pipeline has no
+# native WebRTC destination, e.g. a base/non-caption pipeline):
+#   docker compose -f docker-compose.yml -f docker-compose-mediamtx.yml up -d
 ###############################################################################
 
 services:
@@ -27,6 +40,13 @@ services:
       - REMOTE_MQTT_PORT=${VIZ_REMOTE_MQTT_PORT:-1883}
       - MJPEG_FRAMERATE=${VIZ_MJPEG_FRAMERATE:-10}
       - MJPEG_QUALITY=${VIZ_MJPEG_QUALITY:-5}
+      # MEDIAMTX_*/WEBRTC_RELAY_* only matter for the legacy "WebRTC - Relay"
+      # mode (docker-compose-mediamtx.yml overlay); harmless if unset/unused
+      # here since that mode simply isn't available without the overlay.
+      - MEDIAMTX_API_BASE=http://mediamtx:${MEDIAMTX_API_PORT:-9997}
+      - MEDIAMTX_RTSP_BASE=rtsp://mediamtx:${MEDIAMTX_RTSP_PORT:-8554}
+      - MEDIAMTX_WEBRTC_PORT=${MEDIAMTX_WEBRTC_PORT:-8889}
+      - WEBRTC_RELAY_IDLE_TIMEOUT=${VIZ_WEBRTC_RELAY_IDLE_TIMEOUT:-30}
     ports:
       - "${VIZ_HOST_IP:-127.0.0.1}:${VIZ_PORT:-8080}:8080"
     restart: on-failure:5

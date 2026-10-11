@@ -17,8 +17,15 @@ SPDX-License-Identifier: Apache-2.0
   </header>
 
   <section id="connect-bar" class="panel connect-bar">
-    <label for="host-input">Host</label>
+    <label for="host-input">Companion Compute IP</label>
     <input id="host-input" type="text" placeholder="127.0.0.1" autocomplete="off" />
+
+    <label for="stream-mode-select" title="'WebRTC - Direct' iframes the remote UAV host's own native WHEP viewer page directly (no local relay) -- only available while a *_caption pipeline variant (with a native WebRTC destination) is running. 'WebRTC - Relay' is a legacy opt-in fallback: a local ffmpeg+mediamtx sidecar transcodes the remote RTSP source into WebRTC; it requires starting this stack with the extra docker-compose-mediamtx.yml overlay (see README.md).">Stream mode</label>
+    <select id="stream-mode-select">
+      <option value="webrtc-direct" selected>WebRTC - Direct (native, low latency)</option>
+      <option value="mjpeg">MJPEG (fallback)</option>
+      <option value="webrtc-relay">WebRTC - Relay (legacy, opt-in overlay)</option>
+    </select>
 
     <button id="connect-btn" class="btn btn-primary" type="button">Connect</button>
     <button id="refresh-btn" class="btn btn-ghost" type="button" title="Re-check running pipelines now">Refresh</button>
@@ -30,24 +37,15 @@ SPDX-License-Identifier: Apache-2.0
 
     <aside class="side-panels">
       <section class="panel">
-        <h2>Utilization</h2>
-        <div id="metrics" class="metrics">
-          <div class="metric-row">
-            <span class="metric-label">CPU</span>
-            <div class="bar"><div class="bar-fill" id="bar-cpu"></div></div>
-            <span class="metric-value" id="val-cpu">—</span>
+        <h2>UAV Companion Board Utilization</h2>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-value" style="color:#1ad0ff">CPU <span id="cpuVal">—</span></span>
+            <span class="chart-value" style="color:#8ca0c2">RAM <span id="ramVal">—</span></span>
+            <span class="chart-value gpu-values" id="gpuValues" style="display:none;"></span>
+            <span class="chart-value" id="npuStat" style="color:#b388ff; display:none;">NPU <span id="npuVal">—</span></span>
           </div>
-          <div class="metric-row">
-            <span class="metric-label">Memory</span>
-            <div class="bar"><div class="bar-fill" id="bar-mem"></div></div>
-            <span class="metric-value" id="val-mem">—</span>
-          </div>
-          <div id="gpu-rows"></div>
-          <div class="metric-row">
-            <span class="metric-label">NPU</span>
-            <div class="bar"><div class="bar-fill" id="bar-npu"></div></div>
-            <span class="metric-value" id="val-npu">—</span>
-          </div>
+          <div class="chart-wrap"><canvas id="statsChart"></canvas></div>
         </div>
       </section>
     </aside>
@@ -56,17 +54,25 @@ SPDX-License-Identifier: Apache-2.0
   <section id="arch-panel" class="panel arch-panel hidden">
     <h2>Architecture</h2>
     <p class="muted">
-      This viewer runs on a separate machine from the UAV stack. It pulls the
-      RTSP (M-JPEG) stream and relays it to the browser as a plain HTTP
+      This viewer runs on a separate machine from the UAV stack. By default it
+      pulls the RTSP stream and relays it to the browser as a plain HTTP
       <code>multipart/x-mixed-replace</code> MJPEG stream (no WebRTC/ICE, no
-      extra ports — see <code>VIDEO_DELIVERY_COMPARISON.md</code>), reads
-      pipeline/model info from the DL Streamer Pipeline Server's REST API,
-      proxies CPU/GPU/NPU utilization from <code>metrics-manager</code>, and
-      bridges scene captions from MQTT — all via nginx on the remote host.
+      extra ports — see <code>VIDEO_DELIVERY_COMPARISON.md</code>). The
+      optional "WebRTC" stream mode instead spawns a local ffmpeg relay that
+      pulls the same remote RTSP source, transcodes it to H.264 (WebRTC has
+      no MJPEG codec support), and publishes it into a local
+      <code>mediamtx</code> sidecar, which the browser then plays back over
+      WebRTC/WHEP for lower latency — this works regardless of the remote
+      pipeline's own RTSP encoding. Either way, it reads pipeline/model info
+      from the DL Streamer Pipeline Server's REST API, proxies CPU/GPU/NPU
+      utilization from <code>metrics-manager</code>, and bridges scene
+      captions from MQTT — all via nginx on the remote host.
     </p>
     <img src="img/architecture.svg" alt="Architecture diagram" class="arch-diagram" />
   </section>
 
+  <script src="js/vendor/chart.js"></script>
+  <script src="js/utils/charts.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

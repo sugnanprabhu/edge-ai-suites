@@ -3,7 +3,7 @@
 
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --uid 1000 appuser
@@ -15,6 +15,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .
 COPY static ./static
+
+# Vendor Chart.js for the utilization chart (js/utils/charts.js) instead of
+# loading it from a CDN at browser runtime -- keeps this a fully offline,
+# LAN-only tool. Same version/source as live-video-captioning's own vendoring.
+RUN mkdir -p static/js/vendor && \
+    curl -fsSL -o static/js/vendor/chart.js https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js
 
 USER appuser
 
