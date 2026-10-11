@@ -271,6 +271,10 @@ code { color: var(--accent); }
 .kv dt { color: var(--muted); font-size: 13px; }
 .kv dd { margin: 0; font-size: 13px; word-break: break-all; }
 
+.chart-subtitle {
+  font-size: 12px;
+  margin: 6px 0 0;
+}
 .chart-card {
   margin-top: 10px;
   background: rgba(255, 255, 255, 0.05);

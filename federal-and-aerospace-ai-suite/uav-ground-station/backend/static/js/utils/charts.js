@@ -2,12 +2,18 @@
  * SPDX-FileCopyrightText: (C) 2026 Intel Corporation
  * SPDX-License-Identifier: Apache-2.0
  *
- * Chart management utilities for the CPU/RAM/GPU/NPU utilization chart.
+ * Chart management utilities for CPU/RAM/GPU/NPU utilization charts.
  * Ported from live-video-captioning's js/utils/charts.js; this dashboard is
  * dark-theme-only, so the light/dark ThemeManager it normally pairs with is
  * replaced by a fixed pair of grid/tick colors below.
+ *
+ * createChartManager() returns an independent instance so the dashboard can
+ * run more than one utilization chart at once (e.g. the remote "UAV
+ * Companion Board" chart and the local "UAV Ground Station" chart) without
+ * them clobbering each other's state. `ChartManager` below is the original
+ * singleton instance, kept for backward compatibility.
  */
-const ChartManager = (function () {
+function createChartManager() {
     let statsChart = null;
     const datasetIndex = {};
     const datasetKeys = [];
@@ -148,4 +154,6 @@ const ChartManager = (function () {
         getSeriesColor,
         resetChart,
     };
-})();
+}
+
+const ChartManager = createChartManager();

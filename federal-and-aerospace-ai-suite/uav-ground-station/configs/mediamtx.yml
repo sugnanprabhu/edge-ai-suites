@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+#
+# mediamtx sidecar for "H.264 Relay" video mode (see docker-compose-
+# mediamtx.yml / backend/main.py's /api/relay-path). Pulls an already-H.264
+# RTSP source from the remote UAV host on demand and re-serves it to the
+# browser as WebRTC (WHEP) -- pure remux, no transcoding.
+#
+# The default auth policy only allows the "api" action from 127.0.0.1/::1,
+# but viz-backend calls the control API from a different container on the
+# compose network -- so it's opened up to "any" here, same as before (see
+# LEGACY_STREAM_MODES.md's now-removed ffmpeg-relay design, which needed
+# this for the same reason).
+
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: api
+      - action: read
+      - action: playback
+
+api: yes
+apiAddress: :9997
+
+rtsp: no
+rtmp: no
+hls: no
+srt: no
+
+webrtc: yes
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: ""
+
+# Paths are added/updated at runtime via the control API (viz-backend's
+# /api/relay-path), one per device ("relay-cpu"/"relay-gpu"/"relay-npu"),
+# each pointing its "source" at the current rtsp://<remote-host>:8555/...
+# -- so nothing needs declaring here statically.
+paths:

@@ -12,19 +12,34 @@ service:
     device's RTSP path, via the Pipeline Server's REST API (through nginx).
   * Proxies the metrics-manager SSE stream so the browser never needs direct,
     cross-origin, self-signed-TLS access to the remote host.
+  * Also streams this ground-station machine's *own* CPU/RAM utilization
+    (via /api/local-metrics-stream, read from /proc) so the dashboard can
+    show how much local compute "H.264 Relay" mode's mediamtx remux (or
+    plain WHEP viewing) costs on this box -- see the "UAV Ground Station
+    Utilization" panel.
   * Bridges MQTT scene captions (topic uav/caption/<device>) to the browser
     over SSE.
-  * "WebRTC - Direct" video (the only stream mode -- available whenever the
-    running remote pipeline attached a native WebRTC destination, i.e. a
-    *_caption variant -- see _dest_webrtc_entry / pipeline_info's
-    "webrtc_native"): the dashboard simply iframes the remote UAV host's own
+  * "WebRTC - Direct" video -- available whenever the running remote
+    pipeline attached a native WebRTC destination, i.e. a *_caption variant
+    -- see _dest_webrtc_entry / pipeline_info's "webrtc_native"): the
+    dashboard simply iframes the remote UAV host's own
     https://<host>/webrtc/<frame_path>/ WHEP viewer page directly. No
     transcoding, no local relay/sidecar, no extra backend code at all -- the
     remote stack already serves real, low-latency WebRTC on its own
-    (see uav-vision-analytics's nginx/mediamtx/coturn setup). If the running
-    instance has no native WebRTC destination, the dashboard shows a
+    (see uav-vision-analytics's nginx/mediamtx/coturn setup).
+  * "H.264 Relay" video -- available whenever the running remote pipeline's
+    RTSP destination uses "encoding": "h264" (see pipeline_info's
+    "rtsp_encoding" and uav-vision-analytics's --h264 flag) but has no
+    native WebRTC destination (base cpu/gpu/npu pipelines, or *_caption run
+    with --h264). The remote stream is already H.264, so this local
+    relay is a pure remux, no transcoding: see /api/relay-path, which
+    (re)configures the local mediamtx sidecar (docker-compose-mediamtx.yml)
+    to pull the remote RTSP path on demand, and the dashboard iframes that
+    local mediamtx's own WHEP viewer page.
+  * Otherwise (default MJPEG RTSP, no native WebRTC) the dashboard shows a
     placeholder message instead of video (see LEGACY_STREAM_MODES.md for
-    the MJPEG/WebRTC-Relay fallbacks this project used to have instead).
+    the fully ffmpeg-transcoded MJPEG/WebRTC-Relay this project used to
+    have instead, before the remote stack could emit H.264 directly).
 
 Only ever makes outbound, read-only requests to the user-supplied host; it
 never starts/stops pipelines on the remote stack.
@@ -48,6 +63,28 @@ logger = logging.getLogger("viz-backend")
 DEFAULT_REMOTE_HOST = os.environ.get("DEFAULT_REMOTE_HOST", "127.0.0.1")
 REMOTE_HTTPS_PORT = int(os.environ.get("REMOTE_HTTPS_PORT", "443"))
 REMOTE_MQTT_PORT = int(os.environ.get("REMOTE_MQTT_PORT", "1883"))
+REMOTE_RTSP_PORT = int(os.environ.get("REMOTE_RTSP_PORT", "8555"))
+
+# Local mediamtx sidecar used only for "H.264 Relay" mode (see module
+# docstring) -- MEDIAMTX_API_BASE is the internal docker-network address this
+# backend uses to (re)configure the relay path; the other two are what the
+# *browser* needs to reach mediamtx's own WHEP viewer page directly (so they
+# default to loopback but should be set to the ground-station box's LAN IP
+# in .env if the browser runs on a different machine). None of these matter
+# unless docker-compose-mediamtx.yml is also brought up.
+MEDIAMTX_API_BASE = os.environ.get("MEDIAMTX_API_BASE", "http://mediamtx:9997")
+MEDIAMTX_WEBRTC_HOST = os.environ.get("MEDIAMTX_WEBRTC_HOST", "127.0.0.1")
+MEDIAMTX_WEBRTC_PORT = int(os.environ.get("MEDIAMTX_WEBRTC_PORT", "8889"))
+
+# This ground station's own metrics-manager (intel/metrics-manager, same
+# image/metric set as the remote host's), container name "gs-metrics-manager"
+# -- deliberately distinct from the remote stack's own "metrics-manager"
+# container so the two can coexist if someone ever runs both stacks on the
+# same machine (same reasoning for the "gs-" prefix wherever it shows up
+# below). Internal-only, no host port published; this backend proxies its
+# SSE stream over the docker network, same pattern as /api/metrics-stream.
+LOCAL_METRICS_MANAGER_BASE = os.environ.get("LOCAL_METRICS_MANAGER_BASE", "http://gs-metrics-manager:9090")
+
 
 DEVICE_PATTERN = "^(cpu|gpu|npu)$"
 
@@ -171,6 +208,12 @@ async def runtime_config():
         # (https://<host>:<remoteHttpsPort>/webrtc/<frame_path>/), i.e. the
         # remote stack's own native WHEP endpoint, with no local relay.
         "remoteHttpsPort": REMOTE_HTTPS_PORT,
+        # Where the browser should reach the local mediamtx sidecar's own
+        # WHEP viewer page for "H.264 Relay" mode -- see module docstring.
+        # Harmless to send even if docker-compose-mediamtx.yml isn't up;
+        # the dashboard only uses these once /api/relay-path succeeds.
+        "mediamtxWebrtcHost": MEDIAMTX_WEBRTC_HOST,
+        "mediamtxWebrtcPort": MEDIAMTX_WEBRTC_PORT,
     }
 
 
@@ -198,6 +241,10 @@ async def pipeline_info(host: str = Query(...), device: str = Query(..., pattern
         # _dest_webrtc_entry above). Used by the dashboard to show a
         # placeholder message instead of video when it isn't available.
         "webrtc_native": False,
+        # The RTSP destination's encoding, as set by uav-vision-analytics's
+        # --h264 flag ("h264" or "mjpeg", see configs/config-pymavlink.json)
+        # -- "h264" without webrtc_native means "H.264 Relay" mode is usable.
+        "rtsp_encoding": None,
     }
     try:
         # Self-signed TLS on the remote nginx (see configs/nginx/ssl on that
@@ -235,6 +282,7 @@ async def pipeline_info(host: str = Query(...), device: str = Query(..., pattern
                         continue
 
                     info["webrtc_native"] = _dest_webrtc_entry(destination, frame_path) is not None
+                    info["rtsp_encoding"] = frame_dest.get("encoding", "mjpeg")
 
                     pipeline = request.get("pipeline") or {}
                     params = request.get("parameters") or {}
@@ -370,6 +418,34 @@ async def detect_pipelines(host: str = Query(...)):
     return result
 
 
+_prev_cpu_times: Optional[tuple] = None
+
+
+@app.get("/api/local-metrics-stream")
+async def local_metrics_stream():
+    """Proxy this ground station's own gs-metrics-manager SSE stream to the
+    browser -- same metric set (CPU/RAM/GPU/NPU) and wire format as
+    /api/metrics-stream, just reached directly over the docker network
+    (internal-only, no host port) instead of via a remote host's nginx."""
+    url = f"{LOCAL_METRICS_MANAGER_BASE}/metrics/stream"
+
+    async def relay():
+        try:
+            async with httpx.AsyncClient(timeout=None, trust_env=False) as client:
+                async with client.stream("GET", url) as resp:
+                    if resp.status_code != 200:
+                        yield f"event: error\ndata: {json.dumps({'status': resp.status_code})}\n\n"
+                        return
+                    async for chunk in resp.aiter_bytes():
+                        if chunk:
+                            yield chunk
+        except httpx.HTTPError as exc:
+            logger.warning("local-metrics-stream proxy failed: %s", exc)
+            yield f"event: error\ndata: {json.dumps({'error': str(exc)})}\n\n"
+
+    return StreamingResponse(relay(), media_type="text/event-stream")
+
+
 @app.get("/api/metrics-stream")
 async def metrics_stream(host: str = Query(...)):
     """Proxy metrics-manager's SSE stream (via the remote nginx) to the browser."""
@@ -438,6 +514,36 @@ async def captions_stream(host: str = Query(...), device: str = Query(..., patte
             client.disconnect()
 
     return StreamingResponse(relay(), media_type="text/event-stream")
+
+
+@app.post("/api/relay-path")
+async def relay_path(host: str = Query(...), device: str = Query(..., pattern=DEVICE_PATTERN)):
+    """(Re)configure the local mediamtx sidecar's "relay-<device>" path to
+    pull the remote host's H.264 RTSP stream on demand, for "H.264 Relay"
+    video mode (see module docstring). Pure remux -- mediamtx does not
+    transcode, the remote stream is already H.264.
+
+    Idempotent/cheap to call on every connect (e.g. the user switching the
+    host field, or re-polling pipeline-info) -- mediamtx's config API
+    accepts repeat PATCHes to the same path name. Returns the path name for
+    the dashboard to build its local WHEP viewer iframe URL; raises 502 if
+    the mediamtx sidecar isn't reachable (e.g. docker-compose-mediamtx.yml
+    wasn't brought up).
+    """
+    path_name = f"relay-{device}"
+    source = f"rtsp://{host}:{REMOTE_RTSP_PORT}/{_frame_path(device)}"
+    body = {"source": source, "sourceOnDemand": True}
+    try:
+        async with httpx.AsyncClient(timeout=5.0, trust_env=False) as client:
+            resp = await client.patch(f"{MEDIAMTX_API_BASE}/v3/config/paths/patch/{path_name}", json=body)
+            if resp.status_code == 404:
+                # Path doesn't exist yet -- create it instead of patching.
+                resp = await client.post(f"{MEDIAMTX_API_BASE}/v3/config/paths/add/{path_name}", json=body)
+            resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning("relay-path config failed for host=%s device=%s: %s", host, device, exc)
+        raise HTTPException(status_code=502, detail=f"Cannot configure local mediamtx relay: {exc}")
+    return {"path": path_name}
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

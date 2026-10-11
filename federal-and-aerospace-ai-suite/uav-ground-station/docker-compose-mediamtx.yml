@@ -1,0 +1,45 @@
+###############################################################################
+# SPDX-FileCopyrightText: (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+#
+# Optional sidecar enabling "H.264 Relay" video mode (see backend/main.py's
+# module docstring) -- only needed when the remote uav-vision-analytics
+# host's pipelines are started with --h264 but WITHOUT --caption (i.e. no
+# native WebRTC destination). "WebRTC - Direct" mode (docker-compose.yml
+# alone) needs none of this.
+#
+# mediamtx here pulls the remote host's already-H.264 RTSP stream on demand
+# (see viz-backend's /api/relay-path) and re-serves it to the browser as
+# WebRTC (WHEP) -- pure remux, no transcoding, no GPU/CPU encode cost.
+#
+# Bring up alongside the base stack:
+#   docker compose -f docker-compose.yml -f docker-compose-mediamtx.yml up -d
+#   (or: make up-relay)
+#
+# If the browser runs on a different machine than this one, set
+# VIZ_PUBLIC_HOST in .env to this box's LAN IP so mediamtx advertises a
+# reachable WebRTC ICE candidate (same var the old WebRTC-Relay used -- see
+# LEGACY_STREAM_MODES.md).
+###############################################################################
+
+services:
+
+  mediamtx:
+    image: bluenviron/mediamtx:1.21.2
+    container_name: viz-mediamtx
+    volumes:
+      - ./configs/mediamtx.yml:/mediamtx.yml:ro
+    environment:
+      - MTX_WEBRTCADDITIONALHOSTS=${VIZ_PUBLIC_HOST:-}
+    ports:
+      - "${VIZ_HOST_IP:-127.0.0.1}:${MEDIAMTX_WEBRTC_PORT:-8889}:8889"
+      - "${VIZ_HOST_IP:-127.0.0.1}:${MEDIAMTX_WEBRTC_ICE_UDP_PORT:-8189}:8189/udp"
+    restart: on-failure:5
+
+  viz-backend:
+    environment:
+      - MEDIAMTX_API_BASE=http://mediamtx:9997
+      - MEDIAMTX_WEBRTC_HOST=${VIZ_PUBLIC_HOST:-127.0.0.1}
+      - MEDIAMTX_WEBRTC_PORT=${MEDIAMTX_WEBRTC_PORT:-8889}
+    depends_on:
+      - mediamtx

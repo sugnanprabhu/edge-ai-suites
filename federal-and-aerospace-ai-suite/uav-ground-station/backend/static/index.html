@@ -41,6 +41,23 @@ SPDX-License-Identifier: Apache-2.0
           <div class="chart-wrap"><canvas id="statsChart"></canvas></div>
         </div>
       </section>
+
+      <section class="panel">
+        <h2>UAV Ground Station Utilization</h2>
+        <p class="muted chart-subtitle">
+          This machine's own compute -- e.g. the cost of locally remuxing
+          H.264 RTSP to WebRTC ("H.264 Relay" mode).
+        </p>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-value" style="color:#1ad0ff">CPU <span id="gsCpuVal">—</span></span>
+            <span class="chart-value" style="color:#8ca0c2">RAM <span id="gsRamVal">—</span></span>
+            <span class="chart-value gpu-values" id="gsGpuValues" style="display:none;"></span>
+            <span class="chart-value" id="gsNpuStat" style="color:#b388ff; display:none;">NPU <span id="gsNpuVal">—</span></span>
+          </div>
+          <div class="chart-wrap"><canvas id="gsStatsChart"></canvas></div>
+        </div>
+      </section>
     </aside>
   </main>
 

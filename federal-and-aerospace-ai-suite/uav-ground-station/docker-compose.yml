@@ -7,16 +7,43 @@
 # docker-compose-uavsdk.yml). Enter the UAV host's IP in the dashboard and
 # press Connect; nothing here talks to the UAV host until a user does that.
 #
-# Single stream mode, nothing beyond this file needed: "WebRTC - Direct" --
+# Base stream mode, nothing beyond this file needed: "WebRTC - Direct" --
 # the dashboard iframes the remote UAV host's own native WHEP viewer page
 # (https://<host>/webrtc/<path>/) directly, no local relay, no transcoding.
 # Only available while a *_caption pipeline variant is running on the
 # remote host (the only ones that attach a native WebRTC destination
-# there); see LEGACY_STREAM_MODES.md for the MJPEG/WebRTC-Relay fallbacks
-# this project used to have instead.
+# there).
+#
+# Also bring up docker-compose-mediamtx.yml for "H.264 Relay" mode, which
+# covers --h264 pipelines run WITHOUT --caption (no native WebRTC there):
+#   docker compose -f docker-compose.yml -f docker-compose-mediamtx.yml up -d
+#
+# See LEGACY_STREAM_MODES.md for the fully ffmpeg-transcoded MJPEG/WebRTC-
+# Relay this project used to have instead, before the remote stack could
+# emit H.264 directly.
 ###############################################################################
 
 services:
+
+  # This ground station's own metrics-manager -- powers the "UAV Ground
+  # Station Utilization" panel (CPU/RAM always; GPU/NPU if GPU_DEVICE/
+  # NPU_DEVICE were auto-detected by 'make init', see .env.example). Same
+  # image as uav-vision-analytics's own "metrics-manager", named
+  # "gs-metrics-manager" so the two can coexist if ever run on one machine.
+  # Internal-only (no host port published) -- viz-backend proxies its SSE
+  # stream at /api/local-metrics-stream.
+  gs-metrics-manager:
+    image: intel/metrics-manager:2026.2.0
+    container_name: gs-metrics-manager
+    privileged: true
+    pid: host
+    devices:
+      - ${GPU_DEVICE:-/dev/null}:${GPU_DEVICE:-/dev/null}
+      - ${GPU_RENDER_DEVICE:-/dev/null}:${GPU_RENDER_DEVICE:-/dev/null}
+      - ${NPU_DEVICE:-/dev/null}:${NPU_DEVICE:-/dev/null}
+    volumes:
+      - /sys:/sys:ro
+    restart: unless-stopped
 
   viz-backend:
     build:
@@ -28,6 +55,9 @@ services:
       - DEFAULT_REMOTE_HOST=${VIZ_COMPANION_HOST:-127.0.0.1}
       - REMOTE_HTTPS_PORT=${VIZ_REMOTE_HTTPS_PORT:-443}
       - REMOTE_MQTT_PORT=${VIZ_REMOTE_MQTT_PORT:-1883}
+      - REMOTE_RTSP_PORT=${VIZ_REMOTE_RTSP_PORT:-8555}
     ports:
       - "${VIZ_HOST_IP:-127.0.0.1}:${VIZ_PORT:-8080}:8080"
+    depends_on:
+      - gs-metrics-manager
     restart: on-failure:5

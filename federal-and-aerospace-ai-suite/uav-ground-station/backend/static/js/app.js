@@ -11,10 +11,13 @@
   const archPanel = document.getElementById("arch-panel");
 
   let metricsSource = null;
+  let localMetricsSource = null;
   let pipelinePollTimer = null;
   let currentHost = null;
   let isConnected = false; // true once at least one device card is live
   let remoteHttpsPort = 443; // overwritten by /api/runtime-config
+  let mediamtxWebrtcHost = "127.0.0.1"; // overwritten by /api/runtime-config
+  let mediamtxWebrtcPort = 8889; // overwritten by /api/runtime-config
 
   // device -> { wrap, videoContainer, video, chipTtft, chipTpot, chipThroughput, chipLag,
   //             captionStatus, captionTimeline, captionHistory,
@@ -152,6 +155,8 @@
       hostInput.value = cfg.defaultHost || "127.0.0.1";
       hostInput.placeholder = cfg.defaultHost || "127.0.0.1";
       if (cfg.remoteHttpsPort) remoteHttpsPort = cfg.remoteHttpsPort;
+      if (cfg.mediamtxWebrtcHost) mediamtxWebrtcHost = cfg.mediamtxWebrtcHost;
+      if (cfg.mediamtxWebrtcPort) mediamtxWebrtcPort = cfg.mediamtxWebrtcPort;
       return cfg;
     } catch (err) {
       hostInput.value = "127.0.0.1";
@@ -248,15 +253,25 @@
     card.wrap.remove();
   }
 
-  // --- Video (WebRTC - Direct: remote host's own native WHEP viewer) -------
-  // Only stream mode. The remote UAV stack already serves a complete,
+  // --- Video modes -----------------------------------------------------
+  // "WebRTC - Direct": the remote UAV stack already serves a complete,
   // working WHEP viewer page at https://<host>/webrtc/<path>/ (see
   // uav-vision-analytics's nginx/mediamtx/coturn setup) -- no local relay,
   // no transcoding, no extra backend code: just iframe it directly. Only
   // available while a *_caption pipeline variant (the only ones that attach
   // a native WebRTC destination) is running -- see /api/pipeline-info's
-  // "webrtc_native"; see LEGACY_STREAM_MODES.md for the MJPEG/WebRTC-Relay
-  // fallbacks this project used to have instead.
+  // "webrtc_native".
+  //
+  // "H.264 Relay": used instead whenever the running remote pipeline's RTSP
+  // destination is H.264 (--h264, see "rtsp_encoding") but has no native
+  // WebRTC destination. The local viz-backend configures a mediamtx
+  // sidecar (docker-compose-mediamtx.yml) to pull that already-H.264 RTSP
+  // stream on demand and re-serve it as WebRTC -- pure remux, no
+  // transcoding -- then this iframes mediamtx's own WHEP viewer page
+  // directly, same pattern as WebRTC - Direct.
+  //
+  // See LEGACY_STREAM_MODES.md for the fully ffmpeg-transcoded MJPEG/
+  // WebRTC-Relay this project used to have instead.
   function startWebrtcDirectStream(host, card) {
     card.videoContainer.innerHTML = "";
     const iframe = document.createElement("iframe");
@@ -267,11 +282,44 @@
     setStatus("connected");
   }
 
+  async function startH264RelayStream(host, card) {
+    card.videoContainer.innerHTML = "";
+    const loading = document.createElement("div");
+    loading.className = "device-video-placeholder";
+    loading.textContent = "Starting H.264 relay…";
+    card.videoContainer.appendChild(loading);
+    try {
+      const res = await fetch(
+        `/api/relay-path?host=${encodeURIComponent(host)}&device=${card.device}`,
+        { method: "POST" },
+      );
+      if (!res.ok) throw new Error(`relay-path ${res.status}`);
+      const { path } = await res.json();
+      // Only swap the DOM in if this card is still in relay mode and
+      // pointed at the same host -- avoids a slow response clobbering a
+      // newer mode switch that happened while this fetch was in flight.
+      if (card.activeVideoMode !== "relay" || card.relayHost !== host) return;
+      card.videoContainer.innerHTML = "";
+      const iframe = document.createElement("iframe");
+      iframe.className = "device-video device-video-webrtc";
+      iframe.allow = "autoplay";
+      iframe.src = `http://${mediamtxWebrtcHost}:${mediamtxWebrtcPort}/${path}/`;
+      card.videoContainer.appendChild(iframe);
+      setStatus("connected");
+    } catch (err) {
+      card.videoContainer.innerHTML = "";
+      const placeholder = document.createElement("div");
+      placeholder.className = "device-video-placeholder";
+      placeholder.textContent = "H.264 relay unavailable — is docker-compose-mediamtx.yml running?";
+      card.videoContainer.appendChild(placeholder);
+    }
+  }
+
   function showNoWebrtcPlaceholder(card) {
     card.videoContainer.innerHTML = "";
     const placeholder = document.createElement("div");
     placeholder.className = "device-video-placeholder";
-    placeholder.textContent = "No native WebRTC — start this device with --caption.";
+    placeholder.textContent = "No video stream — start this device with --caption or --h264.";
     card.videoContainer.appendChild(placeholder);
   }
 
@@ -285,28 +333,38 @@
       if (info.pipeline_name) parts.push(info.pipeline_name);
       parts.push(info.captioning ? "captioning on" : "captioning off");
       if (info.frame_rate !== null && info.frame_rate !== undefined) parts.push(`${info.frame_rate} fps`);
-      if (!info.webrtc_native) parts.push("no native WebRTC");
+      if (info.webrtc_native) {
+        parts.push("WebRTC - Direct");
+      } else if (info.rtsp_encoding === "h264") {
+        parts.push("H.264 Relay");
+      } else {
+        parts.push("no video stream");
+      }
       card.metaEl.textContent = parts.join(" • ");
       card.rtspPath = info.rtsp_path || `uav-mavlink-${card.device}`;
-      syncVideoMode(host, card, Boolean(info.webrtc_native));
+      syncVideoMode(host, card, Boolean(info.webrtc_native), info.rtsp_encoding === "h264");
     } catch (err) {
       card.metaEl.textContent = "error";
     }
   }
 
-  // Starts/swaps the card's video element to match the current native-WebRTC
-  // availability, without restarting anything that's already active and
-  // still correct (avoids tearing down a working WebRTC session on every 5s
-  // pipeline-info poll). Shows a placeholder whenever the running remote
-  // instance has no native WebRTC destination (e.g. a base/non-caption
-  // pipeline); switches to WebRTC - Direct automatically once/if that
-  // changes (e.g. the device is restarted with --caption).
-  function syncVideoMode(host, card, webrtcNative) {
-    if (card.activeVideoMode === webrtcNative) return;
-    card.activeVideoMode = webrtcNative;
+  // Starts/swaps the card's video element to match the current remote
+  // destination's capabilities, without restarting anything that's already
+  // active and still correct (avoids tearing down a working WebRTC session
+  // on every 5s pipeline-info poll). Picks, in order: WebRTC - Direct
+  // (native remote WebRTC destination) > H.264 Relay (local mediamtx remux,
+  // only when the remote RTSP is already H.264) > placeholder (default
+  // MJPEG RTSP, nothing we can show without a transcode).
+  function syncVideoMode(host, card, webrtcNative, h264Available) {
+    const mode = webrtcNative ? "direct" : h264Available ? "relay" : "none";
+    if (card.activeVideoMode === mode && card.relayHost === host) return;
+    card.activeVideoMode = mode;
+    card.relayHost = host;
 
-    if (webrtcNative) {
+    if (mode === "direct") {
       startWebrtcDirectStream(host, card);
+    } else if (mode === "relay") {
+      startH264RelayStream(host, card);
     } else {
       showNoWebrtcPlaceholder(card);
     }
@@ -319,6 +377,31 @@
     { key: 'npu', label: 'NPU %', color: '#b388ff' },
   ]);
 
+  // --- Metrics (this ground-station machine's own gs-metrics-manager) -----
+  // Independent of the remote "connect" lifecycle -- always shows how much
+  // local compute is spent on H.264 Relay remuxing / WHEP viewing here.
+  // Same image/metric set as the remote chart, so it reuses applyMetricsTo.
+  const GroundStationChartManager = createChartManager();
+  GroundStationChartManager.createConsolidatedChart('gsStatsChart', [
+    { key: 'cpu', label: 'CPU %', color: '#1ad0ff' },
+    { key: 'mem', label: 'RAM %', color: '#8ca0c2' },
+    { key: 'npu', label: 'NPU %', color: '#b388ff' },
+  ]);
+
+  function startLocalMetricsStream() {
+    if (localMetricsSource) return;
+    localMetricsSource = new EventSource('/api/local-metrics-stream');
+    localMetricsSource.onmessage = (evt) => {
+      let payload;
+      try {
+        payload = JSON.parse(evt.data);
+      } catch (err) {
+        return;
+      }
+      applyMetricsTo(payload.metrics || [], GroundStationChartManager, 'gs');
+    };
+  }
+
   function startMetricsStream(host) {
     if (metricsSource) metricsSource.close();
     ChartManager.resetChart();
@@ -330,7 +413,7 @@
       } catch (err) {
         return;
       }
-      applyMetrics(payload.metrics || []);
+      applyMetricsTo(payload.metrics || [], ChartManager, '');
     };
   }
 
@@ -356,23 +439,30 @@
     }
   }
 
-  function applyMetrics(metrics) {
+  // Shared metrics-manager payload parser -- `idPrefix` picks which panel's
+  // DOM ids to update ("" for the remote "UAV Companion Board" panel's
+  // cpuVal/ramVal/npuVal/npuStat/gpuValues, "gs" for this ground station's
+  // own gsCpuVal/gsRamVal/gsNpuVal/gsNpuStat/gsGpuValues).
+  function applyMetricsTo(metrics, chartManager, idPrefix) {
+    // "" (remote panel) uses lowerCamelCase ids (cpuVal, npuStat, ...);
+    // "gs" (ground station panel) prefixes the capitalized suffix (gsCpuVal, gsNpuStat, ...).
+    const id = (suffix) => (idPrefix ? `${idPrefix}${suffix}` : suffix.charAt(0).toLowerCase() + suffix.slice(1));
     const frameSamples = {};
     const gpuUsageByDevice = new Map();
 
     for (const m of metrics) {
       if (m.name === "cpu_usage_user") {
         frameSamples.cpu = m.value;
-        setHeaderValue("cpuVal", m.value);
+        setHeaderValue(id("CpuVal"), m.value);
       }
       if (m.name === "mem_used_percent") {
         frameSamples.mem = m.value;
-        setHeaderValue("ramVal", m.value);
+        setHeaderValue(id("RamVal"), m.value);
       }
       if (m.name === "npu_utilization") {
         frameSamples.npu = m.value;
-        setHeaderValue("npuVal", m.value);
-        const npuStat = document.getElementById("npuStat");
+        setHeaderValue(id("NpuVal"), m.value);
+        const npuStat = document.getElementById(id("NpuStat"));
         if (npuStat) npuStat.style.display = "";
       }
       if (m.name === "gpu_engine_usage_usage") {
@@ -382,7 +472,7 @@
     }
 
     if (gpuUsageByDevice.size > 0) {
-      const gpuValues = document.getElementById("gpuValues");
+      const gpuValues = document.getElementById(id("GpuValues"));
       if (gpuValues) gpuValues.innerHTML = "";
       Array.from(gpuUsageByDevice.entries())
         .sort(([a], [b]) => (Number(a) || 0) - (Number(b) || 0))
@@ -392,7 +482,7 @@
           if (gpuValues) {
             const chip = document.createElement("span");
             chip.className = "gpu-value-chip";
-            chip.style.color = ChartManager.getSeriesColor(key);
+            chip.style.color = chartManager.getSeriesColor(key);
             chip.textContent = `GPU-${gpuId} ${usage.toFixed(0)}%`;
             gpuValues.appendChild(chip);
           }
@@ -401,7 +491,7 @@
     }
 
     if (Object.keys(frameSamples).length > 0) {
-      ChartManager.pushStatFrame(frameSamples);
+      chartManager.pushStatFrame(frameSamples);
     }
   }
 
@@ -554,4 +644,5 @@
   });
 
   loadRuntimeConfig();
+  startLocalMetricsStream();
 })();
