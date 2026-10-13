@@ -7,8 +7,6 @@
   const refreshBtn = document.getElementById("refresh-btn");
   const connStatus = document.getElementById("conn-status");
   const cardsContainer = document.getElementById("cards-container");
-  const toggleArchBtn = document.getElementById("toggle-arch");
-  const archPanel = document.getElementById("arch-panel");
 
   let metricsSource = null;
   let localMetricsSource = null;
@@ -24,7 +22,6 @@
   //             lastCaptionReceivedAt, captionsSource, titleEl, metaEl }
   const cards = new Map();
 
-  toggleArchBtn.addEventListener("click", () => archPanel.classList.toggle("hidden"));
 
   function setStatus(state) {
     connStatus.classList.remove("pill-off", "pill-on", "pill-pending");
@@ -173,18 +170,53 @@
     header.className = "device-card-header";
     const title = document.createElement("div");
     title.className = "device-card-title";
-    title.textContent = device.toUpperCase();
+    const deviceBadge = document.createElement("span");
+    deviceBadge.className = `device-badge device-badge-${device}`;
+    deviceBadge.textContent = device.toUpperCase();
+    title.appendChild(deviceBadge);
     const meta = document.createElement("div");
     meta.className = "device-card-meta";
     meta.textContent = "—";
+    // Expands the live video to the whole screen (Esc returns). Fullscreens
+    // our own container rather than relying on the remote viewer page's
+    // controls, so it works for both Direct and Relay modes.
+    const expandBtn = document.createElement("button");
+    expandBtn.type = "button";
+    expandBtn.className = "btn btn-ghost btn-icon-only device-expand-btn";
+    expandBtn.title = "Full screen";
+    expandBtn.setAttribute("aria-label", `View ${device.toUpperCase()} video full screen`);
+    expandBtn.disabled = true;
+    expandBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+    const headerRight = document.createElement("div");
+    headerRight.className = "device-card-header-right";
+    headerRight.appendChild(meta);
+    headerRight.appendChild(expandBtn);
     header.appendChild(title);
-    header.appendChild(meta);
+    header.appendChild(headerRight);
 
     // Holds either an <iframe> (the remote host's native WHEP viewer) or a
     // placeholder <div> (no native WebRTC destination available) -- swapped
     // by syncVideoMode() below.
     const videoContainer = document.createElement("div");
     videoContainer.className = "device-video-container";
+    // Enabled only while a live video iframe is mounted (not a placeholder).
+    new MutationObserver(() => {
+      expandBtn.disabled = !videoContainer.querySelector("iframe");
+    }).observe(videoContainer, { childList: true });
+    // videoContainer's children are replaced on every mode switch, so the
+    // full-screen target is a stable wrapper that also holds the exit button.
+    const videoStage = document.createElement("div");
+    videoStage.className = "device-video-stage";
+    const exitBtn = document.createElement("button");
+    exitBtn.type = "button";
+    exitBtn.className = "btn btn-ghost device-exit-fullscreen";
+    exitBtn.textContent = `${device.toUpperCase()} \u2022 Exit full screen (Esc)`;
+    exitBtn.addEventListener("click", () => document.exitFullscreen().catch(() => {}));
+    videoStage.appendChild(videoContainer);
+    videoStage.appendChild(exitBtn);
+    expandBtn.addEventListener("click", () => {
+      if (videoStage.requestFullscreen) videoStage.requestFullscreen().catch(() => {});
+    });
 
     const captionPanel = document.createElement("div");
     captionPanel.className = "caption-panel";
@@ -225,7 +257,7 @@
     captionPanel.appendChild(captionTimeline);
 
     wrap.appendChild(header);
-    wrap.appendChild(videoContainer);
+    wrap.appendChild(videoStage);
     wrap.appendChild(captionPanel);
 
     const card = {
@@ -276,7 +308,8 @@
     card.videoContainer.innerHTML = "";
     const iframe = document.createElement("iframe");
     iframe.className = "device-video device-video-webrtc";
-    iframe.allow = "autoplay";
+    iframe.allow = "autoplay; fullscreen";
+    iframe.allowFullscreen = true;
     iframe.src = `https://${host}:${remoteHttpsPort}/webrtc/${card.rtspPath}/`;
     card.videoContainer.appendChild(iframe);
     setStatus("connected");
@@ -302,7 +335,8 @@
       card.videoContainer.innerHTML = "";
       const iframe = document.createElement("iframe");
       iframe.className = "device-video device-video-webrtc";
-      iframe.allow = "autoplay";
+      iframe.allow = "autoplay; fullscreen";
+      iframe.allowFullscreen = true;
       iframe.src = `http://${mediamtxWebrtcHost}:${mediamtxWebrtcPort}/${path}/`;
       card.videoContainer.appendChild(iframe);
       setStatus("connected");
@@ -331,16 +365,18 @@
       const state = info.reachable ? (info.state || "unknown") : "unreachable";
       const parts = [state];
       if (info.pipeline_name) parts.push(info.pipeline_name);
-      parts.push(info.captioning ? "captioning on" : "captioning off");
-      if (info.frame_rate !== null && info.frame_rate !== undefined) parts.push(`${info.frame_rate} fps`);
+      // Header shows only state + pipeline; the rest stays available on hover.
+      const details = [info.captioning ? "captioning on" : "captioning off"];
+      if (info.frame_rate !== null && info.frame_rate !== undefined) details.push(`${info.frame_rate} fps`);
       if (info.webrtc_native) {
-        parts.push("WebRTC - Direct");
+        details.push("WebRTC - Direct");
       } else if (info.rtsp_encoding === "h264") {
-        parts.push("H.264 Relay");
+        details.push("H.264 Relay");
       } else {
-        parts.push("no video stream");
+        details.push("no video stream");
       }
       card.metaEl.textContent = parts.join(" • ");
+      card.metaEl.title = [...parts, ...details].join(" • ");
       card.rtspPath = info.rtsp_path || `uav-mavlink-${card.device}`;
       syncVideoMode(host, card, Boolean(info.webrtc_native), info.rtsp_encoding === "h264");
     } catch (err) {
@@ -620,6 +656,8 @@
       syncCards(host, detected.devices.map((d) => d.device));
     }
     pipelinePollTimer = setInterval(() => pollAndReconcile(host), 5000);
+    // search.js registers this host's running pipelines for VSS live search.
+    document.dispatchEvent(new CustomEvent("uav:connected", { detail: { host } }));
   }
 
   function disconnectNow() {
@@ -628,6 +666,7 @@
     resetMetricsHeader();
     renderEmptyState(null);
     setStatus("off");
+    document.dispatchEvent(new CustomEvent("uav:disconnected"));
   }
 
   connectBtn.addEventListener("click", () => {

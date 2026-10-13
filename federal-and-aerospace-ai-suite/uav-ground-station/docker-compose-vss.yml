@@ -1,0 +1,293 @@
+###############################################################################
+# SPDX-FileCopyrightText: (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+#
+# Optional overlay that adds "Live Natural Language Search" to the dashboard.
+# It runs only the containers that VSS search needs, using the Video Search and
+# Summarization (VSS) sample app's published images:
+#   https://github.com/open-edge-platform/edge-ai-libraries/tree/main/sample-applications/video-search-and-summarization
+#
+# Containers added (8): pipeline-manager, video-search, multimodal-dataprep,
+# multimodal-embedding-serving, vector-retriever, vdms-vector-db,
+# postgres-service, minio-service. The VSS UI, nginx gateway, and the
+# summarization path (VLM/LLM serving, audio, RabbitMQ) are NOT included.
+#
+# This file also sets VSS_ENABLED=true on viz-backend, which shows the search
+# button and panel. Without this overlay, search is hidden and /api/search*
+# returns 404.
+#
+# Bring up with the base stack (and mediamtx, if you use H.264 Relay):
+#   docker compose -f docker-compose.yml -f docker-compose-mediamtx.yml -f docker-compose-vss.yml up -d --build
+#   (or: make up-vss)
+#
+# Required in .env: VSS_MINIO_USER, VSS_MINIO_PASSWORD, VSS_POSTGRES_USER,
+# VSS_POSTGRES_PASSWORD (see .env.example). The first start downloads the
+# embedding/detection models into the vss-ov-models / vss-yolox-models volumes,
+# which takes a few minutes.
+#
+# Only the Pipeline Manager API is published on the host (VIZ_HOST_IP:
+# VSS_MANAGER_PORT) so you can upload videos or register the drone's RTSP feed
+# for indexing. It has no authentication; keep VIZ_HOST_IP on a trusted
+# network. All other VSS services are reachable only on the compose network.
+###############################################################################
+
+x-vss-proxy-env: &vss-proxy-env
+  http_proxy: ${http_proxy:-}
+  https_proxy: ${https_proxy:-}
+  no_proxy: ${no_proxy:-},localhost,pipeline-manager,video-search,multimodal-dataprep,multimodal-embedding-serving,vector-retriever,vdms-vector-db,postgres-service,minio-service
+
+x-vss-accel: &vss-accel
+  devices:
+    - ${GPU_DEVICE:-/dev/null}:${GPU_DEVICE:-/dev/null}
+    - ${GPU_RENDER_DEVICE:-/dev/null}:${GPU_RENDER_DEVICE:-/dev/null}
+    - ${NPU_DEVICE:-/dev/null}:${NPU_DEVICE:-/dev/null}
+  group_add:
+    - ${VIDEO_GROUP_ID:-44}
+    - ${RENDER_GROUP_ID:-992}
+
+services:
+
+  viz-backend:
+    environment:
+      - VSS_ENABLED=true
+      - VSS_MANAGER_URL=http://pipeline-manager:3000
+      - VSS_DATASTORE_URL=http://minio-service:80
+      - VSS_QUERY_EMBEDDING_DEVICE=${VSS_QUERY_EMBEDDING_DEVICE:-CPU}
+      - VSS_INGEST_EMBEDDING_DEVICE=${VSS_INGEST_EMBEDDING_DEVICE:-CPU}
+      - VSS_DETECTION_DEVICE=${VSS_DETECTION_DEVICE:-CPU}
+    depends_on:
+      - pipeline-manager
+
+  pipeline-manager:
+    image: ${VSS_REGISTRY:-intel/}pipeline-manager:${VSS_TAG:-2026.3.0-rc1}
+    ports:
+      - "${VIZ_HOST_IP:-127.0.0.1}:${VSS_MANAGER_PORT:-3001}:3000"
+    environment:
+      <<: *vss-proxy-env
+      MINIO_PROTOCOL: "http:"
+      MINIO_HOST: minio-service
+      MINIO_PORT: 80
+      MINIO_BUCKET: video-summary
+      MINIO_ROOT_USER: ${VSS_MINIO_USER:?set VSS_MINIO_USER in .env}
+      MINIO_ROOT_PASSWORD: ${VSS_MINIO_PASSWORD:?set VSS_MINIO_PASSWORD in .env}
+      DB_HOST: postgres-service
+      DB_PORT: 5432
+      DB_USER: ${VSS_POSTGRES_USER:?set VSS_POSTGRES_USER in .env}
+      DB_PASSWORD: ${VSS_POSTGRES_PASSWORD:?set VSS_POSTGRES_PASSWORD in .env}
+      DB_NAME: video_summary_db
+      SUMMARY_FEATURE: "FEATURE_OFF"
+      SEARCH_FEATURE: "FEATURE_ON"
+      SEARCH_ENDPOINT: http://video-search:8000
+      SEARCH_DATAPREP_ENDPOINT: http://multimodal-dataprep:8000
+      VS_INDEX_NAME: video_frame_embeddings
+    # Matches VSS's own compose (writes uploads under root-owned paths).
+    user: "0:0"
+    depends_on:
+      minio-service:
+        condition: service_healthy
+      postgres-service:
+        condition: service_healthy
+      multimodal-dataprep:
+        condition: service_healthy
+      multimodal-embedding-serving:
+        condition: service_healthy
+      video-search:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  video-search:
+    image: ${VSS_REGISTRY:-intel/}video-search:${VSS_TAG:-2026.3.0-rc1}
+    environment:
+      <<: *vss-proxy-env
+      no_proxy_env: ${no_proxy:-},localhost,multimodal-embedding-serving,multimodal-dataprep,minio-service,vdms-vector-db,vector-retriever,pipeline-manager
+      EMBEDDINGS_ENDPOINT: http://multimodal-embedding-serving:8000/embeddings
+      EMBEDDINGS_MODEL_NAME: ${VSS_EMBEDDING_MODEL:-CLIP/clip-vit-b-32}
+      INDEX_NAME: video_frame_embeddings
+      RETRIEVER_ENDPOINT: http://vector-retriever:8000/query
+      VIDEO_UPLOAD_ENDPOINT: http://pipeline-manager:3000
+      AGGREGATION_ENABLED: "true"
+      AGGREGATION_MAX_RESULTS: ${VSS_MAX_RESULTS:-20}
+    depends_on:
+      minio-service:
+        condition: service_healthy
+      multimodal-dataprep:
+        condition: service_started
+      vector-retriever:
+        condition: service_started
+    restart: unless-stopped
+
+  multimodal-dataprep:
+    image: ${VSS_REGISTRY:-intel/}multimodal-dataprep:${VSS_TAG:-2026.3.0-rc1}
+    hostname: multimodal-dataprep
+    <<: *vss-accel
+    environment:
+      <<: *vss-proxy-env
+      MM_DATAPREP_APP_HOST: multimodal-dataprep
+      MM_DATAPREP_VECTORDB_BACKEND: vdms
+      MM_DATAPREP_STORAGE_BACKEND: minio
+      MM_DATAPREP_VDMS_VDB_HOST: vdms-vector-db
+      MM_DATAPREP_VDMS_VDB_PORT: 55555
+      MM_DATAPREP_MINIO_ENDPOINT: minio-service:80
+      MM_DATAPREP_MINIO_ACCESS_KEY: ${VSS_MINIO_USER:?set VSS_MINIO_USER in .env}
+      MM_DATAPREP_MINIO_SECRET_KEY: ${VSS_MINIO_PASSWORD:?set VSS_MINIO_PASSWORD in .env}
+      MM_DATAPREP_MINIO_SECURE: "false"
+      MM_DATAPREP_DEFAULT_BUCKET_NAME: video-summary
+      MM_DATAPREP_DB_COLLECTION: video_frame_embeddings
+      MM_DATAPREP_EMBEDDING_MODEL_NAME: ${VSS_EMBEDDING_MODEL:-CLIP/clip-vit-b-32}
+      MM_DATAPREP_USE_OPENVINO: "true"
+      MM_DATAPREP_EMBEDDING_DEVICE: ${VSS_INGEST_EMBEDDING_DEVICE:-CPU}
+      MM_DATAPREP_OV_MODELS_DIR: /app/ov_models
+      MM_DATAPREP_FRAME_INTERVAL: ${VSS_FRAME_INTERVAL:-15}
+      MM_DATAPREP_ENABLE_OBJECT_DETECTION: ${VSS_ENABLE_OBJECT_DETECTION:-true}
+      MM_DATAPREP_DETECTION_MODEL_DIR: /app/models/yolox
+      MM_DATAPREP_DETECTION_DEVICE: ${VSS_DETECTION_DEVICE:-CPU}
+      MM_DATAPREP_FRAMES_TEMP_DIR: /tmp/dataprep
+      MM_DATAPREP_LIVE_STREAM_ENABLED: "true"
+      # Live streams write continuously; keep 24h by default (0 = forever).
+      MM_DATAPREP_LIVE_RETENTION_HOURS: ${VSS_LIVE_RETENTION_HOURS:-24}
+      MM_DATAPREP_LIVE_STREAM_DB_HOST: postgres-service
+      MM_DATAPREP_LIVE_STREAM_DB_PORT: 5432
+      MM_DATAPREP_LIVE_STREAM_DB_NAME: video_summary_db
+      MM_DATAPREP_LIVE_STREAM_DB_USER: ${VSS_POSTGRES_USER:?set VSS_POSTGRES_USER in .env}
+      MM_DATAPREP_LIVE_STREAM_DB_PASSWORD: ${VSS_POSTGRES_PASSWORD:?set VSS_POSTGRES_PASSWORD in .env}
+      # Only viz-backend and pipeline-manager call dataprep, both server-side.
+      MM_DATAPREP_ALLOW_ORIGINS: http://localhost
+    shm_size: 2gb
+    ulimits:
+      nofile:
+        soft: 32768
+        hard: 65535
+    volumes:
+      - vss-yolox-models:/app/models/yolox
+      - vss-data-prep:/tmp/dataprep
+      - vss-ov-models:/home/appuser/.cache/huggingface
+      - vss-ov-models:/app/ov_models
+    depends_on:
+      minio-service:
+        condition: service_healthy
+      postgres-service:
+        condition: service_healthy
+      vdms-vector-db:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/v1/dataprep/health').getcode()==200 else 1)"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 10s
+    restart: unless-stopped
+
+  # Embeds the search prompt (query side); dataprep embeds the video frames.
+  multimodal-embedding-serving:
+    image: ${VSS_REGISTRY:-intel/}multimodal-embedding-serving:${VSS_TAG:-2026.3.0-rc1}
+    <<: *vss-accel
+    environment:
+      <<: *vss-proxy-env
+      no_proxy_env: ${no_proxy:-},localhost,minio-service,multimodal-dataprep
+      EMBEDDING_MODEL_NAME: ${VSS_EMBEDDING_MODEL:-CLIP/clip-vit-b-32}
+      EMBEDDING_DEVICE: ${VSS_QUERY_EMBEDDING_DEVICE:-CPU}
+      EMBEDDING_USE_OV: "true"
+      EMBEDDING_OV_MODELS_DIR: /app/ov_models
+    shm_size: 2gb
+    ulimits:
+      nofile:
+        soft: 32768
+        hard: 65535
+    volumes:
+      - vss-ov-models:/home/appuser/.cache/huggingface
+      - vss-data-prep:/tmp/dataprep
+      - vss-ov-models:/app/ov_models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').getcode()==200 else 1)"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 10s
+    restart: unless-stopped
+
+  vector-retriever:
+    image: ${VSS_REGISTRY:-intel/}vector-retriever-vdms:${VSS_TAG:-2026.3.0-rc1}
+    hostname: vector-retriever
+    environment:
+      <<: *vss-proxy-env
+      NO_PROXY: ${no_proxy:-},localhost,multimodal-embedding-serving,vdms-vector-db
+      RETRIEVER_BACKEND: vdms
+      INDEX_NAME: video_frame_embeddings
+      EMBEDDINGS_ENDPOINT: http://multimodal-embedding-serving:8000/embeddings
+      EMBEDDING_MODEL_NAME: ${VSS_EMBEDDING_MODEL:-CLIP/clip-vit-b-32}
+      DEFAULT_TOP_K: 1000
+      MAX_TOP_K: 1000
+      VDMS_VDB_HOST: vdms-vector-db
+      VDMS_VDB_PORT: 55555
+      SEARCH_ENGINE: FaissFlat
+      DISTANCE_STRATEGY: IP
+    depends_on:
+      multimodal-embedding-serving:
+        condition: service_healthy
+      vdms-vector-db:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')\""]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  vdms-vector-db:
+    image: intellabs/vdms:v2.12.0
+    environment:
+      - OVERRIDE_db_root_path=/db
+      - OVERRIDE_images_path=/db/images
+      - OVERRIDE_descriptors_path=/db/descriptors
+      - OVERRIDE_blobs_path=/db/blobs
+      - OVERRIDE_pmgd_path=/db/graph
+    volumes:
+      - vss-vdms-db:/db
+    restart: unless-stopped
+
+  postgres-service:
+    image: postgres:17.4
+    environment:
+      POSTGRES_USER: ${VSS_POSTGRES_USER:?set VSS_POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${VSS_POSTGRES_PASSWORD:?set VSS_POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: video_summary_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d video_summary_db"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 15s
+    volumes:
+      - vss-pg-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  minio-service:
+    image: chainguard/minio@sha256:cb84dfa704c648c4b14858aa288576bb1cf756a9b326112a0934db00e87d0bb8
+    environment:
+      MINIO_ROOT_USER: ${VSS_MINIO_USER:?set VSS_MINIO_USER in .env}
+      MINIO_ROOT_PASSWORD: ${VSS_MINIO_PASSWORD:?set VSS_MINIO_PASSWORD in .env}
+    command: ["server", "/data", "--address", ":80", "--console-address", ":81"]
+    healthcheck:
+      test: ["CMD-SHELL", "echo > /dev/tcp/127.0.0.1/80 && exit 0 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - vss-minio-data:/data
+    restart: unless-stopped
+
+volumes:
+  vss-minio-data:
+  vss-pg-data:
+  vss-vdms-db:
+  vss-ov-models:
+  vss-data-prep:
+  vss-yolox-models:

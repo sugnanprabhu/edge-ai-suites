@@ -40,6 +40,8 @@ service:
     placeholder message instead of video (see LEGACY_STREAM_MODES.md for
     the fully ffmpeg-transcoded MJPEG/WebRTC-Relay this project used to
     have instead, before the remote stack could emit H.264 directly).
+  * Natural-language video search via a separately deployed Video Search
+    and Summarization (VSS) stack -- see vss_search.py.
 
 Only ever makes outbound, read-only requests to the user-supplied host; it
 never starts/stops pipelines on the remote stack.
@@ -56,6 +58,9 @@ import paho.mqtt.client as mqtt
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
+
+import vss_live_sync
+from vss_search import router as vss_search_router
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("viz-backend")
@@ -370,6 +375,11 @@ async def detect_pipelines(host: str = Query(...)):
     matches instead of stopping at the first, so the UI can show one card
     per concurrently-running device (e.g. CPU and GPU both active).
     """
+    return await _detect_running_devices(host)
+
+
+async def _detect_running_devices(host: str) -> dict:
+    """Shared by /api/detect-pipelines and the VSS live-stream sync."""
     base = _remote_base(host)
     result = {"reachable": False, "devices": []}
     try:
@@ -545,5 +555,36 @@ async def relay_path(host: str = Query(...), device: str = Query(..., pattern=DE
         raise HTTPException(status_code=502, detail=f"Cannot configure local mediamtx relay: {exc}")
     return {"path": path_name}
 
+
+# VSS natural-language search proxy (separate VSS Compose stack) -- see vss_search.py.
+vss_live_sync.configure(_detect_running_devices, REMOTE_RTSP_PORT, _frame_path)
+app.include_router(vss_search_router)
+app.include_router(vss_live_sync.router)
+
+
+class RevalidateStaticAssets:
+    """Make browsers revalidate the dashboard's HTML/CSS/JS on every load
+    (cheap 304s via ETag) so a rebuilt image is never paired with stale
+    cached assets. Pure ASGI so /api/* streams (SSE, video) are untouched."""
+
+    def __init__(self, asgi_app):
+        self.app = asgi_app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["path"].startswith("/api/"):
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_cache_header(message):
+            if message["type"] == "http.response.start":
+                headers = [(k, v) for k, v in message.get("headers", []) if k.lower() != b"cache-control"]
+                headers.append((b"cache-control", b"no-cache"))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, send_with_cache_header)
+
+
+app.add_middleware(RevalidateStaticAssets)
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

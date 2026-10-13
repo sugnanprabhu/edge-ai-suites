@@ -13,7 +13,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY main.py .
+COPY main.py vss_search.py vss_live_sync.py ./
 COPY static ./static
 
 # Vendor Chart.js for the utilization chart (js/utils/charts.js) instead of

@@ -18,6 +18,9 @@
 # covers --h264 pipelines run WITHOUT --caption (no native WebRTC there):
 #   docker compose -f docker-compose.yml -f docker-compose-mediamtx.yml up -d
 #
+# Add docker-compose-vss.yml to also run the VSS search containers and show
+# the "Live Natural Language Search" option in the dashboard (make up-vss).
+#
 # See LEGACY_STREAM_MODES.md for the fully ffmpeg-transcoded MJPEG/WebRTC-
 # Relay this project used to have instead, before the remote stack could
 # emit H.264 directly.
@@ -56,6 +59,21 @@ services:
       - REMOTE_HTTPS_PORT=${VIZ_REMOTE_HTTPS_PORT:-443}
       - REMOTE_MQTT_PORT=${VIZ_REMOTE_MQTT_PORT:-1883}
       - REMOTE_RTSP_PORT=${VIZ_REMOTE_RTSP_PORT:-8555}
+      # "Live Natural Language Search" is off (and hidden) unless the
+      # docker-compose-vss.yml overlay is added, which sets VSS_ENABLED=true
+      # and points the URLs at its own VSS containers. To use a full VSS
+      # deployment started with VSS's setup.sh instead, set VSS_ENABLED=true
+      # (and the URLs, if VSS runs on another machine) in .env.
+      - VSS_ENABLED=${VSS_ENABLED:-false}
+      - VSS_MANAGER_URL=${VSS_MANAGER_URL:-http://host.docker.internal:12345/manager}
+      - VSS_DATASTORE_URL=${VSS_DATASTORE_URL:-http://host.docker.internal:12345/datastore}
+      - VSS_DATASTORE_BUCKET=${VSS_DATASTORE_BUCKET:-video-summary}
+      - VSS_SEARCH_TIMEOUT_SECONDS=${VSS_SEARCH_TIMEOUT_SECONDS:-60}
+      - VSS_LIVE_SYNC_INTERVAL_SECONDS=${VSS_LIVE_SYNC_INTERVAL_SECONDS:-15}
+    extra_hosts:
+      # Lets the default VSS_*_URL reach a VSS stack published on this same
+      # machine's host ports.
+      - "host.docker.internal:host-gateway"
     ports:
       - "${VIZ_HOST_IP:-127.0.0.1}:${VIZ_PORT:-8080}:8080"
     depends_on:
