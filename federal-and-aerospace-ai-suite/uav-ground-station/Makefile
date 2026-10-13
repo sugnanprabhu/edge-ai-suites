@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: (C) 2026 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-.PHONY: help init up up-relay up-vss down down-relay down-vss clean-vss-index delete-vss-volumes logs
+.PHONY: help init up up-vss down down-vss clean-vss-index delete-vss-volumes logs
 
 ifneq (,$(wildcard .env))
   include .env
@@ -36,16 +36,10 @@ init: ## Create .env from template if missing, and auto-detect GPU/NPU device pa
 		fi; \
 	fi
 
-up: init ## Build and start the ground-station viewer (WebRTC - Direct)
-	docker compose up -d --build
-
-up-relay: init ## Also start the mediamtx sidecar, for "H.264 Relay" mode (--h264 without --caption)
+up: init ## Build and start the ground-station viewer + mediamtx relay sidecar (H.264 Relay mode; requires remote pipelines started with --h264)
 	docker compose -f docker-compose.yml -f docker-compose-mediamtx.yml up -d --build
 
-down: ## Stop and remove the ground-station viewer
-	docker compose down -v
-
-down-relay: ## Stop and remove the ground-station viewer + mediamtx sidecar
+down: ## Stop and remove the ground-station viewer + mediamtx relay sidecar
 	docker compose -f docker-compose.yml -f docker-compose-mediamtx.yml down -v
 
 VSS_COMPOSE = docker compose -f docker-compose.yml -f docker-compose-mediamtx.yml -f docker-compose-vss.yml
@@ -75,4 +69,4 @@ delete-vss-volumes: ## DELETE ALL VSS volumes incl. downloaded models (asks firs
 	$(VSS_COMPOSE) down -v
 
 logs: ## Tail logs from all running containers
-	docker compose logs -f
+	docker compose -f docker-compose.yml -f docker-compose-mediamtx.yml logs -f

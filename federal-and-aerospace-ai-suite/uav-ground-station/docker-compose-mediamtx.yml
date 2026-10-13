@@ -2,24 +2,22 @@
 # SPDX-FileCopyrightText: (C) 2026 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 #
-# Optional sidecar enabling "H.264 Relay" video mode (see backend/main.py's
-# module docstring) -- only needed when the remote uav-vision-analytics
-# host's pipelines are started with --h264 but WITHOUT --caption (i.e. no
-# native WebRTC destination). "WebRTC - Direct" mode (docker-compose.yml
-# alone) needs none of this.
+# Sidecar enabling "H.264 Relay" video mode (see backend/main.py's module
+# docstring) -- always brought up alongside the base stack (see `make up`).
+# Usable whenever the remote uav-vision-analytics host's pipelines are
+# started with --h264.
 #
 # mediamtx here pulls the remote host's already-H.264 RTSP stream on demand
 # (see viz-backend's /api/relay-path) and re-serves it to the browser as
 # WebRTC (WHEP) -- pure remux, no transcoding, no GPU/CPU encode cost.
 #
-# Bring up alongside the base stack:
+# Brought up alongside the base stack automatically:
 #   docker compose -f docker-compose.yml -f docker-compose-mediamtx.yml up -d
-#   (or: make up-relay)
+#   (or: make up)
 #
 # If the browser runs on a different machine than this one, set
 # VIZ_PUBLIC_HOST in .env to this box's LAN IP so mediamtx advertises a
-# reachable WebRTC ICE candidate (same var the old WebRTC-Relay used -- see
-# LEGACY_STREAM_MODES.md).
+# reachable WebRTC ICE candidate.
 ###############################################################################
 
 services:

@@ -8,9 +8,7 @@
 #
 # The default auth policy only allows the "api" action from 127.0.0.1/::1,
 # but viz-backend calls the control API from a different container on the
-# compose network -- so it's opened up to "any" here, same as before (see
-# LEGACY_STREAM_MODES.md's now-removed ffmpeg-relay design, which needed
-# this for the same reason).
+# compose network -- so it's opened up to "any" here.
 
 authInternalUsers:
   - user: any

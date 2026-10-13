@@ -14,32 +14,27 @@ service:
     cross-origin, self-signed-TLS access to the remote host.
   * Also streams this ground-station machine's *own* CPU/RAM utilization
     (via /api/local-metrics-stream, read from /proc) so the dashboard can
-    show how much local compute "H.264 Relay" mode's mediamtx remux (or
-    plain WHEP viewing) costs on this box -- see the "UAV Ground Station
-    Utilization" panel.
+    show how much local compute "H.264 Relay" mode's mediamtx remux costs
+    on this box -- see the "UAV Ground Station Utilization" panel.
   * Bridges MQTT scene captions (topic uav/caption/<device>) to the browser
     over SSE.
-  * "WebRTC - Direct" video -- available whenever the running remote
-    pipeline attached a native WebRTC destination, i.e. a *_caption variant
-    -- see _dest_webrtc_entry / pipeline_info's "webrtc_native"): the
-    dashboard simply iframes the remote UAV host's own
-    https://<host>/webrtc/<frame_path>/ WHEP viewer page directly. No
-    transcoding, no local relay/sidecar, no extra backend code at all -- the
-    remote stack already serves real, low-latency WebRTC on its own
-    (see uav-vision-analytics's nginx/mediamtx/coturn setup).
-  * "H.264 Relay" video -- available whenever the running remote pipeline's
-    RTSP destination uses "encoding": "h264" (see pipeline_info's
-    "rtsp_encoding" and uav-vision-analytics's --h264 flag) but has no
-    native WebRTC destination (base cpu/gpu/npu pipelines, or *_caption run
-    with --h264). The remote stream is already H.264, so this local
-    relay is a pure remux, no transcoding: see /api/relay-path, which
-    (re)configures the local mediamtx sidecar (docker-compose-mediamtx.yml)
-    to pull the remote RTSP path on demand, and the dashboard iframes that
-    local mediamtx's own WHEP viewer page.
-  * Otherwise (default MJPEG RTSP, no native WebRTC) the dashboard shows a
-    placeholder message instead of video (see LEGACY_STREAM_MODES.md for
-    the fully ffmpeg-transcoded MJPEG/WebRTC-Relay this project used to
-    have instead, before the remote stack could emit H.264 directly).
+  * "H.264 Relay" video -- the only video mode: whenever the running remote
+    pipeline's RTSP destination uses "encoding": "h264" (see
+    pipeline_info's "rtsp_encoding" and uav-vision-analytics's --h264
+    flag), the local viz-backend configures a mediamtx sidecar
+    (docker-compose-mediamtx.yml, always brought up alongside this
+    service -- see `make up`) to pull that already-H.264 RTSP stream on
+    demand and re-serve it as WebRTC -- pure remux, no transcoding: see
+    /api/relay-path, and the dashboard iframes that local mediamtx's own
+    WHEP viewer page. The remote stack's own native WebRTC destination
+    (nginx/mediamtx/coturn, available on *_caption pipeline variants) is
+    intentionally never consumed directly here -- RTSP is always ingested
+    and relayed locally instead, so this stack's own compute/network
+    footprint is visible and consistent regardless of how the remote
+    pipeline was started.
+  * Otherwise (default MJPEG RTSP) the dashboard shows a placeholder
+    message instead of video -- start the remote pipeline with --h264 to
+    enable relay video.
   * Natural-language video search via a separately deployed Video Search
     and Summarization (VSS) stack -- see vss_search.py.
 
@@ -161,30 +156,6 @@ def _dest_frame_paths(destination: dict) -> list:
     return []
 
 
-def _dest_webrtc_entry(destination: dict, frame_path: str) -> Optional[dict]:
-    """Return the destination.frame entry (if any) for the remote pipeline
-    server's *native* WebRTC AppDestination matching frame_path.
-
-    Unlike the RTSP entry, a WebRTC entry is keyed by 'peer-id' (not 'path')
-    -- see uav-vision-analytics's uav_pipeline_control.sh /
-    mavlink_pipeline_manager.py, which attach it as:
-        {"type": "webrtc", "peer-id": "<frame_path>"}
-    only alongside the *_caption pipeline variants (the base cpu/gpu/npu
-    pipelines only attach an RTSP destination). Used to tell the dashboard
-    whether "WebRTC - Direct" mode (consuming the remote nginx's own
-    /webrtc/<frame_path>/ WHEP endpoint directly, no local relay) is
-    actually available for the currently running instance.
-    """
-    if not isinstance(destination, dict):
-        return None
-    frame = destination.get("frame")
-    entries = frame if isinstance(frame, list) else ([frame] if isinstance(frame, dict) else [])
-    for entry in entries:
-        if isinstance(entry, dict) and entry.get("type") == "webrtc" and entry.get("peer-id") == frame_path:
-            return entry
-    return None
-
-
 def _pipeline_identity(pipeline: dict) -> Optional[str]:
     """The REST API's request.pipeline.name is always the generic grouping
     name ("user_defined_pipelines"), not the actual pipeline that was
@@ -208,11 +179,6 @@ async def runtime_config():
     return {
         "defaultHost": DEFAULT_REMOTE_HOST,
         "devices": ["cpu", "gpu", "npu"],
-        # Port the remote UAV host's nginx publishes HTTPS on -- used by the
-        # dashboard to build the direct WebRTC viewer URL
-        # (https://<host>:<remoteHttpsPort>/webrtc/<frame_path>/), i.e. the
-        # remote stack's own native WHEP endpoint, with no local relay.
-        "remoteHttpsPort": REMOTE_HTTPS_PORT,
         # Where the browser should reach the local mediamtx sidecar's own
         # WHEP viewer page for "H.264 Relay" mode -- see module docstring.
         # Harmless to send even if docker-compose-mediamtx.yml isn't up;
@@ -240,15 +206,10 @@ async def pipeline_info(host: str = Query(...), device: str = Query(..., pattern
         "max_new_tokens": None,
         "frame_rate": None,
         "source_of_truth": None,
-        # True when the running instance attached a native WebRTC
-        # AppDestination (peer-id=frame_path) on the remote pipeline server
-        # -- only the *_caption pipeline variants do this (see
-        # _dest_webrtc_entry above). Used by the dashboard to show a
-        # placeholder message instead of video when it isn't available.
-        "webrtc_native": False,
         # The RTSP destination's encoding, as set by uav-vision-analytics's
         # --h264 flag ("h264" or "mjpeg", see configs/config-pymavlink.json)
-        # -- "h264" without webrtc_native means "H.264 Relay" mode is usable.
+        # -- "h264" means "H.264 Relay" mode is usable; anything else leaves
+        # the dashboard showing a placeholder instead of video.
         "rtsp_encoding": None,
     }
     try:
@@ -286,7 +247,6 @@ async def pipeline_info(host: str = Query(...), device: str = Query(..., pattern
                     if frame_dest is None:
                         continue
 
-                    info["webrtc_native"] = _dest_webrtc_entry(destination, frame_path) is not None
                     info["rtsp_encoding"] = frame_dest.get("encoding", "mjpeg")
 
                     pipeline = request.get("pipeline") or {}

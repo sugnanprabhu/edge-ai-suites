@@ -13,16 +13,14 @@ that host until you enter its IP in the dashboard and press **Connect**.
 
 ## What it shows
 
-- The live video stream, via **WebRTC - Direct**: the dashboard iframes the
-  remote UAV host's own native WHEP viewer page
-  (`https://<host>/webrtc/<path>/`) directly -- no local relay, no
-  transcoding, no extra backend code. Only available while a `*_caption`
-  pipeline variant (the only ones that attach a native WebRTC destination)
-  is running on the remote host; otherwise the dashboard shows a
-  placeholder message ("No native WebRTC — start this device with
-  --caption."). See `LEGACY_STREAM_MODES.md` for the MJPEG/WebRTC-Relay
-  fallbacks this project used to have instead, removed to keep the code
-  minimal.
+- The live video stream, via **H.264 Relay**: the local viz-backend
+  configures a mediamtx sidecar (`docker-compose-mediamtx.yml`, always
+  brought up alongside the base stack -- see `make up`) to pull the remote
+  UAV host's already-H.264 RTSP stream on demand and re-serve it to the
+  browser as WebRTC (WHEP) -- pure remux, no transcoding. Requires the
+  remote pipeline to be started with `--h264`; otherwise the dashboard
+  shows a placeholder message ("No video stream — start this device with
+  --h264.").
   Each card's expand button (or the player's own full-screen control)
   shows that feed full screen; Esc or "Exit full screen" returns.
 - Scene captions (`uav/caption/<device>` over MQTT, bridged to the browser via
@@ -44,11 +42,10 @@ that host until you enter its IP in the dashboard and press **Connect**.
 
 ```text
 uav-ground-station/
-├── docker-compose.yml   # 1 service: viz-backend (FastAPI UI + proxy/bridge
-│                        # APIs + WebRTC - Direct iframe support)
+├── docker-compose.yml   # viz-backend (FastAPI UI + proxy/bridge APIs)
+├── docker-compose-mediamtx.yml  # mediamtx sidecar for H.264 Relay video (always used, see `make up`)
+├── docker-compose-vss.yml  # optional VSS search containers (make up-vss)
 ├── .env.example         # Copy to .env; all vars have loopback-safe defaults
-├── VIDEO_DELIVERY_COMPARISON.md  # Why MJPEG-over-HTTP was once chosen over WebRTC/MQTT
-├── LEGACY_STREAM_MODES.md  # How the removed MJPEG/WebRTC-Relay modes worked
 └── backend/             # FastAPI app: static UI + proxy/bridge APIs
     ├── main.py
     ├── vss_search.py    # /api/search* proxy to the separate VSS stack

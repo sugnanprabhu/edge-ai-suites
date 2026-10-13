@@ -7,23 +7,15 @@
 # docker-compose-uavsdk.yml). Enter the UAV host's IP in the dashboard and
 # press Connect; nothing here talks to the UAV host until a user does that.
 #
-# Base stream mode, nothing beyond this file needed: "WebRTC - Direct" --
-# the dashboard iframes the remote UAV host's own native WHEP viewer page
-# (https://<host>/webrtc/<path>/) directly, no local relay, no transcoding.
-# Only available while a *_caption pipeline variant is running on the
-# remote host (the only ones that attach a native WebRTC destination
-# there).
-#
-# Also bring up docker-compose-mediamtx.yml for "H.264 Relay" mode, which
-# covers --h264 pipelines run WITHOUT --caption (no native WebRTC there):
-#   docker compose -f docker-compose.yml -f docker-compose-mediamtx.yml up -d
+# Video is always delivered via "H.264 Relay" mode: docker-compose-
+# mediamtx.yml is brought up alongside this file (see `make up`), and the
+# local mediamtx sidecar pulls the remote host's RTSP stream on demand and
+# re-serves it to the browser as WebRTC (WHEP) -- pure remux, no
+# transcoding. Requires the remote pipeline to be started with --h264;
+# otherwise the dashboard shows a placeholder instead of video.
 #
 # Add docker-compose-vss.yml to also run the VSS search containers and show
 # the "Live Natural Language Search" option in the dashboard (make up-vss).
-#
-# See LEGACY_STREAM_MODES.md for the fully ffmpeg-transcoded MJPEG/WebRTC-
-# Relay this project used to have instead, before the remote stack could
-# emit H.264 directly.
 ###############################################################################
 
 services:

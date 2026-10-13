@@ -286,35 +286,16 @@
   }
 
   // --- Video modes -----------------------------------------------------
-  // "WebRTC - Direct": the remote UAV stack already serves a complete,
-  // working WHEP viewer page at https://<host>/webrtc/<path>/ (see
-  // uav-vision-analytics's nginx/mediamtx/coturn setup) -- no local relay,
-  // no transcoding, no extra backend code: just iframe it directly. Only
-  // available while a *_caption pipeline variant (the only ones that attach
-  // a native WebRTC destination) is running -- see /api/pipeline-info's
-  // "webrtc_native".
-  //
-  // "H.264 Relay": used instead whenever the running remote pipeline's RTSP
-  // destination is H.264 (--h264, see "rtsp_encoding") but has no native
-  // WebRTC destination. The local viz-backend configures a mediamtx
-  // sidecar (docker-compose-mediamtx.yml) to pull that already-H.264 RTSP
-  // stream on demand and re-serve it as WebRTC -- pure remux, no
-  // transcoding -- then this iframes mediamtx's own WHEP viewer page
-  // directly, same pattern as WebRTC - Direct.
-  //
-  // See LEGACY_STREAM_MODES.md for the fully ffmpeg-transcoded MJPEG/
-  // WebRTC-Relay this project used to have instead.
-  function startWebrtcDirectStream(host, card) {
-    card.videoContainer.innerHTML = "";
-    const iframe = document.createElement("iframe");
-    iframe.className = "device-video device-video-webrtc";
-    iframe.allow = "autoplay; fullscreen";
-    iframe.allowFullscreen = true;
-    iframe.src = `https://${host}:${remoteHttpsPort}/webrtc/${card.rtspPath}/`;
-    card.videoContainer.appendChild(iframe);
-    setStatus("connected");
-  }
-
+  // "H.264 Relay" is the only video mode: whenever the running remote
+  // pipeline's RTSP destination is already H.264 (--h264, see
+  // "rtsp_encoding"), the local viz-backend configures a mediamtx sidecar
+  // (docker-compose-mediamtx.yml, always brought up alongside this service
+  // -- see `make up`) to pull that RTSP stream on demand and re-serve it as
+  // WebRTC -- pure remux, no transcoding -- then this iframes mediamtx's
+  // own WHEP viewer page. The remote stack's own native WebRTC destination
+  // is intentionally never consumed directly: RTSP is always ingested and
+  // relayed locally instead, so this stack's footprint stays consistent
+  // regardless of how the remote pipeline was started.
   async function startH264RelayStream(host, card) {
     card.videoContainer.innerHTML = "";
     const loading = document.createElement("div");
@@ -368,9 +349,7 @@
       // Header shows only state + pipeline; the rest stays available on hover.
       const details = [info.captioning ? "captioning on" : "captioning off"];
       if (info.frame_rate !== null && info.frame_rate !== undefined) details.push(`${info.frame_rate} fps`);
-      if (info.webrtc_native) {
-        details.push("WebRTC - Direct");
-      } else if (info.rtsp_encoding === "h264") {
+      if (info.rtsp_encoding === "h264") {
         details.push("H.264 Relay");
       } else {
         details.push("no video stream");
@@ -378,7 +357,7 @@
       card.metaEl.textContent = parts.join(" • ");
       card.metaEl.title = [...parts, ...details].join(" • ");
       card.rtspPath = info.rtsp_path || `uav-mavlink-${card.device}`;
-      syncVideoMode(host, card, Boolean(info.webrtc_native), info.rtsp_encoding === "h264");
+      syncVideoMode(host, card, info.rtsp_encoding === "h264");
     } catch (err) {
       card.metaEl.textContent = "error";
     }
@@ -387,19 +366,16 @@
   // Starts/swaps the card's video element to match the current remote
   // destination's capabilities, without restarting anything that's already
   // active and still correct (avoids tearing down a working WebRTC session
-  // on every 5s pipeline-info poll). Picks, in order: WebRTC - Direct
-  // (native remote WebRTC destination) > H.264 Relay (local mediamtx remux,
-  // only when the remote RTSP is already H.264) > placeholder (default
-  // MJPEG RTSP, nothing we can show without a transcode).
-  function syncVideoMode(host, card, webrtcNative, h264Available) {
-    const mode = webrtcNative ? "direct" : h264Available ? "relay" : "none";
+  // on every 5s pipeline-info poll). Picks H.264 Relay (local mediamtx
+  // remux, only when the remote RTSP is already H.264) or a placeholder
+  // (default MJPEG RTSP, nothing we can show without a transcode).
+  function syncVideoMode(host, card, h264Available) {
+    const mode = h264Available ? "relay" : "none";
     if (card.activeVideoMode === mode && card.relayHost === host) return;
     card.activeVideoMode = mode;
     card.relayHost = host;
 
-    if (mode === "direct") {
-      startWebrtcDirectStream(host, card);
-    } else if (mode === "relay") {
+    if (mode === "relay") {
       startH264RelayStream(host, card);
     } else {
       showNoWebrtcPlaceholder(card);
