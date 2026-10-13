@@ -57,7 +57,7 @@
 
   // --- Caption formatting (mirrors live-video-captioning's run-card timeline) -
   const MAX_CAPTION_BUFFER = 20;
-  const VISIBLE_CAPTION_LIMIT = 4;
+  const VISIBLE_CAPTION_LIMIT = MAX_CAPTION_BUFFER;
 
   function formatStreamSeconds(seconds) {
     if (!Number.isFinite(seconds)) return "—";

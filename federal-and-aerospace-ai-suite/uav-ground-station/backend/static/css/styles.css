@@ -103,7 +103,7 @@ code { color: var(--accent); }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
   gap: 16px;
-  align-content: start;
+  align-content: stretch;
   overflow-y: auto;
   min-height: 0;
 }
@@ -123,6 +123,7 @@ code { color: var(--accent); }
   display: flex;
   flex-direction: column;
   min-height: 0;
+  height: 100%;
 }
 .device-card-header {
   display: flex;
@@ -146,24 +147,25 @@ code { color: var(--accent); }
 }
 .device-video {
   width: 100%;
+  height: 100%;
   display: block;
   background: #000;
-  /* Capped (not full aspect-ratio width) so each card stays compact and
-     more cards fit on screen -- same idea as LVC's fixed-height run cards. */
-  max-height: 32vh;
   object-fit: contain;
   flex-shrink: 0;
   border: 0;
 }
 .device-video-container {
+  width: 100%;
+  height: 100%;
   flex-shrink: 0;
 }
 .device-video-webrtc {
-  height: 32vh;
+  width: 100%;
+  height: 100%;
 }
 .device-video-placeholder {
   width: 100%;
-  height: 32vh;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -583,19 +585,19 @@ code { color: var(--accent); }
    search results) that brighten on hover instead of the thick OS default. */
 .caption-timeline, .cards-container, .side-panels, .result-list, .modal-body {
   scrollbar-width: thin;
-  scrollbar-color: rgba(138, 151, 166, 0.25) transparent;
+  scrollbar-color: rgba(138, 151, 166, 0.45) transparent;
 }
 .caption-timeline:hover, .cards-container:hover, .side-panels:hover, .result-list:hover, .modal-body:hover {
-  scrollbar-color: rgba(138, 151, 166, 0.5) transparent;
+  scrollbar-color: rgba(138, 151, 166, 0.75) transparent;
 }
 .caption-timeline::-webkit-scrollbar, .cards-container::-webkit-scrollbar, .side-panels::-webkit-scrollbar,
 .result-list::-webkit-scrollbar, .modal-body::-webkit-scrollbar { width: 6px; height: 6px; }
 .caption-timeline::-webkit-scrollbar-track, .cards-container::-webkit-scrollbar-track, .side-panels::-webkit-scrollbar-track,
 .result-list::-webkit-scrollbar-track, .modal-body::-webkit-scrollbar-track { background: transparent; }
 .caption-timeline::-webkit-scrollbar-thumb, .cards-container::-webkit-scrollbar-thumb, .side-panels::-webkit-scrollbar-thumb,
-.result-list::-webkit-scrollbar-thumb, .modal-body::-webkit-scrollbar-thumb { background: rgba(138, 151, 166, 0.25); border-radius: 3px; }
+.result-list::-webkit-scrollbar-thumb, .modal-body::-webkit-scrollbar-thumb { background: rgba(138, 151, 166, 0.45); border-radius: 3px; }
 .caption-timeline:hover::-webkit-scrollbar-thumb, .cards-container:hover::-webkit-scrollbar-thumb, .side-panels:hover::-webkit-scrollbar-thumb,
-.result-list:hover::-webkit-scrollbar-thumb, .modal-body:hover::-webkit-scrollbar-thumb { background: rgba(138, 151, 166, 0.5); }
+.result-list:hover::-webkit-scrollbar-thumb, .modal-body:hover::-webkit-scrollbar-thumb { background: rgba(138, 151, 166, 0.75); }
 
 /* ---- Architecture dialog (js/arch.js) ---- */
 .arch-dialog {
@@ -723,9 +725,9 @@ code { color: var(--accent); }
 .device-card-header-right { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .device-expand-btn { padding: 3px 5px; line-height: 0; flex-shrink: 0; }
 .device-expand-btn:disabled { opacity: 0.35; cursor: default; }
-.device-video-stage { position: relative; flex-shrink: 0; }
+.device-video-stage { position: relative; flex-shrink: 0; width: 100%; aspect-ratio: 16 / 9; }
 .device-exit-fullscreen { display: none; }
-.device-video-stage:fullscreen { background: #000; }
+.device-video-stage:fullscreen { background: #000; aspect-ratio: auto; }
 .device-video-stage:fullscreen .device-video-container { width: 100%; height: 100%; }
 .device-video-stage:fullscreen .device-video,
 .device-video-stage:fullscreen .device-video-webrtc,
@@ -760,3 +762,10 @@ code { color: var(--accent); }
 .device-badge-gpu { color: #ffb347; background: rgba(255, 179, 71, 0.10); border-color: rgba(255, 179, 71, 0.35); }
 .device-badge-npu { color: #b388ff; background: rgba(179, 136, 255, 0.10); border-color: rgba(179, 136, 255, 0.35); }
 .device-card-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+
+/* Card body rhythm: gap under the video, and header/video/captions share the
+   card's 16px inner edge instead of each adding their own inset. */
+.device-card .device-card-header { padding-left: 0; padding-right: 0; border-bottom: 0; margin-bottom: 8px; }
+.device-video-stage { margin-bottom: 12px; border-radius: 6px; overflow: hidden; }
+.device-video-stage:fullscreen { border-radius: 0; }
+.device-card .caption-panel { border-top: 0; padding: 0; }
