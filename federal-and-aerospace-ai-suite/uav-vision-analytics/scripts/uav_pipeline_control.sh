@@ -14,7 +14,7 @@
 # find it without the caller tracking it manually.
 #
 # Usage:
-#   ./scripts/uav_pipeline_control.sh start  [cpu|gpu|npu|all] [--caption]
+#   ./scripts/uav_pipeline_control.sh start  [cpu|gpu|npu|all] [--caption] [--h264]
 #   ./scripts/uav_pipeline_control.sh stop   [cpu|gpu|npu|all] [--caption]
 #   ./scripts/uav_pipeline_control.sh status [cpu|gpu|npu|all] [--caption]
 #
@@ -22,6 +22,17 @@
 # telemetry overlay, same as the base pipeline, plus VLM scene captioning
 # published over MQTT on 'uav/caption/<device>'). Requires 'make vlm-model'
 # to have been run first (see README.md).
+#
+# --h264 requests H.264 (instead of the pipeline server's default MJPEG)
+# encoding on the RTSP destination, via the opt-in "encoding": "h264" field
+# (see dlstreamer-pipeline-server's gstreamer_rtsp_destination.py). Only
+# affects the 'start' action's RTSP destination(s) -- ignored for
+# stop/status.
+#
+# BBOX_THICKNESS (in .env, default "6") sets the detection bounding-box line
+# thickness (1-10, gvawatermark's own default is 2) via the RTSP/WebRTC
+# destinations' "overlay-properties": {"thickness": N} field -- no
+# pipeline.json or dlstreamer-pipeline-server image change needed.
 
 set -Eeuo pipefail
 
@@ -36,6 +47,7 @@ fi
 
 HOST_IP="${HOST_IP:-127.0.0.1}"
 NPU_DEVICE="${NPU_DEVICE:-/dev/null}"
+BBOX_THICKNESS="${BBOX_THICKNESS:-6}"
 MODEL_PATH="/home/pipeline-server/resources/models/yolo11s/yolo11s_openvino_model/yolo11s.xml"
 ALL_DEVICES=(cpu gpu npu)
 
@@ -72,9 +84,30 @@ frame_path() {
   echo "uav-mavlink-${device}"
 }
 
+rtsp_frame_json() {
+  # Builds the "frame" destination's RTSP object, opting into H.264 encoding
+  # (instead of the pipeline server's default MJPEG) when requested, and
+  # setting the detection bounding-box line thickness via overlay-properties
+  # from BBOX_THICKNESS in .env (pipeline server auto-inserts
+  # 'gvawatermark displ-cfg=thickness=N' ahead of this destination's
+  # encoder).
+  local path="$1" h264="$2"
+  local encoding_field=""
+  [[ "${h264}" == "true" ]] && encoding_field=', "encoding": "h264"'
+  echo "{\"type\": \"rtsp\", \"path\": \"${path}\", \"overlay-properties\": {\"thickness\": ${BBOX_THICKNESS}}${encoding_field}}"
+}
+
+webrtc_frame_json() {
+  # Same overlay-properties mechanism applies independently to the WebRTC
+  # destination (see gstreamer_webrtc_destination.py) -- both need the same
+  # thickness for the RTSP/WebRTC views to look identical.
+  local peer_id="$1"
+  echo "{\"type\": \"webrtc\", \"peer-id\": \"${peer_id}\", \"overlay-properties\": {\"thickness\": ${BBOX_THICKNESS}}}"
+}
+
 start_one() {
-  local device="$1" caption="$2"
-  local name path sfile payload response instance_id
+  local device="$1" caption="$2" h264="$3"
+  local name path sfile payload response instance_id rtsp_frame webrtc_frame
 
   if [[ "${device}" == "npu" && "${NPU_DEVICE}" == "/dev/null" ]]; then
     err "Skipping NPU: NPU_DEVICE is not set in .env (no NPU device available)."
@@ -122,23 +155,26 @@ start_one() {
     # rendered per-destination by the pipeline server's own AppDestination,
     # so 'overlay' must be left at its default (on) here too, matching the
     # RTSP destination, or the WebRTC viewer shows no bounding boxes.
+    rtsp_frame="$(rtsp_frame_json "${path}" "${h264}")"
+    webrtc_frame="$(webrtc_frame_json "${path}")"
     payload="$(cat <<EOF
 {
   "destination": {
     "frame": [
-      {"type": "rtsp", "path": "${path}"},
-      {"type": "webrtc", "peer-id": "${path}"}
+      ${rtsp_frame},
+      ${webrtc_frame}
     ]
   }
 }
 EOF
 )"
   else
+    rtsp_frame="$(rtsp_frame_json "${path}" "${h264}")"
     payload="$(cat <<EOF
 {
   "destination": {
     "metadata": {"type": "file", "path": "/tmp/results_${device}.jsonl", "format": "json-lines"},
-    "frame": {"type": "rtsp", "path": "${path}"}
+    "frame": ${rtsp_frame}
   },
   "parameters": {
     "detection-properties": {
@@ -163,7 +199,7 @@ EOF
 
   echo "${instance_id}" > "${sfile}"
   log "Started '${name}'. Instance ID: ${instance_id}"
-  log "RTSP output: rtsp://${HOST_IP}:8555/${path}"
+  log "RTSP output: rtsp://${HOST_IP}:8555/${path} ($([ "${h264}" == "true" ] && echo "H.264" || echo "MJPEG"))"
   if [[ "${caption}" == "true" ]]; then
     log "WebRTC (WHEP) viewer: https://${HOST_IP}/webrtc/${path}/"
     log "MQTT captions: topic 'uav/caption/${device}' on broker:1883"
@@ -222,20 +258,25 @@ resolve_devices() {
 ACTION="${1:-}"
 DEVICE_ARG="${2:-gpu}"
 CAPTION="false"
+H264="false"
 for arg in "${@:3}"; do
   [[ "${arg}" == "--caption" ]] && CAPTION="true"
+  [[ "${arg}" == "--h264" ]] && H264="true"
 done
-# Allow --caption as the 2nd positional too, e.g. 'start all --caption'.
-[[ "${DEVICE_ARG}" == "--caption" ]] && { CAPTION="true"; DEVICE_ARG="all"; }
+# Allow --caption/--h264 as the 2nd positional too, e.g. 'start all --caption'.
+case "${DEVICE_ARG}" in
+  --caption) CAPTION="true"; DEVICE_ARG="all" ;;
+  --h264) H264="true"; DEVICE_ARG="all" ;;
+esac
 
 case "${ACTION}" in
   start|stop|status)
     for device in $(resolve_devices "${DEVICE_ARG}"); do
-      "${ACTION}_one" "${device}" "${CAPTION}"
+      "${ACTION}_one" "${device}" "${CAPTION}" "${H264}"
     done
     ;;
   *)
-    echo "Usage: $0 {start|stop|status} [cpu|gpu|npu|all] [--caption]" >&2
+    echo "Usage: $0 {start|stop|status} [cpu|gpu|npu|all] [--caption] [--h264]" >&2
     exit 1
     ;;
 esac

@@ -35,6 +35,14 @@ PIPELINE_DEVICE = os.getenv("PIPELINE_DEVICE", "gpu").lower()
 # branch, unchanged, plus an independent VLM captioning branch over MQTT).
 CAPTION_ENABLED = os.getenv("CAPTION", "false").strip().lower() in ("1", "true", "yes")
 
+# Passed via make start-rtsp BBOX_THICKNESS=<1-10>; default 6 (gvawatermark's
+# own default). Applied as overlay-properties on the RTSP/WebRTC destinations
+# -- the pipeline server auto-inserts 'gvawatermark displ-cfg=thickness=N'
+# ahead of the encoder for each destination, so this needs no pipeline.json
+# or dlstreamer-pipeline-server image change, just a REST request field.
+BBOX_THICKNESS = os.getenv("BBOX_THICKNESS", "6").strip()
+BBOX_OVERLAY_PROPERTIES = {"thickness": BBOX_THICKNESS}
+
 # ── Pipeline definitions ──────────────────────────────────────────────────────
 
 RTSP_PIPELINES = [
@@ -75,6 +83,7 @@ def _build_rtsp_payload(pipeline: dict) -> dict:
             "frame": {
                 "type": "rtsp",
                 "path": pipeline["frame_path"],
+                "overlay-properties": BBOX_OVERLAY_PROPERTIES,
             },
         },
         "parameters": {
@@ -102,19 +111,22 @@ def _build_rtsp_caption_payload(pipeline: dict) -> dict:
     # Detection-box overlay is NOT drawn in-pipeline (only a gvapython
     # telemetry-text overlay runs before gvametaconvert/gvametapublish) --
     # it's rendered per-destination by the pipeline server's own
-    # AppDestination (see pipeline_server_patches/gstreamer_rtsp_destination.py),
-    # so 'overlay' must be left at its default (on) here too, matching the
-    # RTSP destination, or the WebRTC viewer shows no bounding boxes.
+    # AppDestination (gvawatermark auto-inserted ahead of each destination's
+    # encoder), so 'overlay' must be left at its default (on) here too,
+    # matching the RTSP destination, or the WebRTC viewer shows no bounding
+    # boxes. 'overlay-properties' (thickness) is applied identically on both.
     return {
         "destination": {
             "frame": [
                 {
                     "type": "rtsp",
                     "path": pipeline["frame_path"],
+                    "overlay-properties": BBOX_OVERLAY_PROPERTIES,
                 },
                 {
                     "type": "webrtc",
                     "peer-id": pipeline["frame_path"],
+                    "overlay-properties": BBOX_OVERLAY_PROPERTIES,
                 },
             ],
         },
