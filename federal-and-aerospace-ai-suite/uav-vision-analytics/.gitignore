@@ -19,3 +19,8 @@ resources/ov_models/
 # Tracked instance IDs written by scripts/uav_pipeline_control.sh (start/stop
 # pipelines manually without arming the drone via MAVLink).
 .uav_pipeline_*_instance_id
+
+# Local-only analysis notes, kept on disk but not committed.
+/BENCHMARK-COMBINED-VS-SEPARATE.md
+/CPU-ANALYSIS-COMBINED-VS-SEPARATE.md
+/PIPELINE-ARCHITECTURE-COMBINED-VS-SEPARATE.md
